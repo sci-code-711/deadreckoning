@@ -1,7 +1,5 @@
 # deadreckoning
-Masters project AO35: "Trajectory reconstruction using Inertial Motion Units (IMUs) and the implications for Aerobots on Venus." 
-
-Supervised by: Colin Wilson, University of Oxford, AOPP department.
+"Trajectory reconstruction using Inertial Motion Units (IMUs) and the implications for Aerobots on Venus." 
 
 Included are:
 3 working copys of the deadreckoning code used during this project 
@@ -17,4 +15,4 @@ Additonaly an implementation of a multi positional calibration procedure for a 6
 
 The research was completed using a 6 axis LSM6SD3 embedded on a Arduino 33Iot board.
 
-for more details read the full report saved as "AO35 annonymous upload"
+for more details read the full report saved as "report upload"
