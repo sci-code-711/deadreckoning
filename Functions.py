@@ -19,7 +19,7 @@ def exp_q(dl, dm, dn):
         * dn {``float``} -- Rate of rotation about z axis
 
     Returns:
-        * ``quaternion`` -- Rotation quaternion
+        ``quaternion`` -- Rotation quaternion
 
     """
     n = [dl, dm, dn]
@@ -46,7 +46,7 @@ def eul_from_q(quat):
         * quat {``quaternion``} -- Quaternion to be converted
 
     Returns:
-        * ``tuple`` -- A tuple of the form (yaw, pitch, roll)
+        ``tuple`` -- A tuple of the form (yaw, pitch, roll)
 
     """
     l = M.degrees(
@@ -80,7 +80,7 @@ def q_update(qi, vl, vm, vn, dt, *, steps=100):
         * dt {``float``} -- Time over which to integrate
 
     Keyword Arguments:
-        * steps {``int``} -- Number of step to break the integration down over.
+        ``int`` -- Number of step to break the integration down over.
             Default value is 100.
 
     """
@@ -119,7 +119,7 @@ def Omega(w):
         * w {``list``} -- Angular velocity 3 vector in (degrees/s)
 
     Returns:
-        * omega {``array``} -- Quaternion multiplication matrix.
+        ``array`` -- multiplication matrix.
 
     """
     assert len(w) == 3, f"{w} is not a valid angular velocity vector."
@@ -150,7 +150,7 @@ def RK4(qi, w1, w2, dt):
             in (seconds)
 
     Returns:
-        * res{``quaternion``} -- Final attitude quaternion of the system.
+        ``quaternion`` -- Final attitude quaternion of the system.
 
     """
 
@@ -180,11 +180,20 @@ def RK4(qi, w1, w2, dt):
 
 def q_from_g(a_vec):
     """
-    Calculates the attitude quaternion of a system from a gravity measurment.
-    This
-    """
+    Calculates the attitude quaternion of a system from a gravity measurement.
+    This measures all attitude relative to acceleration due to gravity being
+    vertically up.
 
-    a_vec[:] = a_vec[:]/(np.linalg.norm(a_vec))
+    Arguments:
+        * a_vec {``Iter``} -- 3 vector of measured acceleration in the frame
+            of the IMU.
+
+    Returns:
+        ``quaternion`` -- The attitude quaternion of the system where positive y
+            is considered the natural vertical coordinate.
+
+    """
+    a_vec = a_vec / (np.linalg.norm(a_vec))
 
     if np.linalg.norm(np.cross(ag, g)) == 0:
         qc = Q.quaternion(1, 0, 0, 0)
@@ -215,8 +224,7 @@ def quaternion(quat):
             quaternion in the order (qw, qx, qy, qz)
 
     Returns:
-        * The quaternion object
-        * return type: ``quaternion``
+        ``quaternion`` -- The quaternion object
 
     """
     assert len(quat) == 4, f"Failed to provide a valid quaternion."
