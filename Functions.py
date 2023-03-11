@@ -68,11 +68,24 @@ def eul_from_q(quat):
 
 
 def q_update(qi, vl, vm, vn, dt, *, steps=100):
+    """
+    Integrate a rate of change of euler angles over a time step dt to find a new
+    attitude from the original given attitude qi.
 
+    Arguments:
+        * qi {``quaternion``} -- Original attitude quaternion
+        * dl {``float``} -- rate od rotation about x axis in frame of IMU
+        * dm {``float``} -- rate od rotation about y axis in frame of IMU
+        * dn {``float``} -- rate od rotation about z axis in frame of IMU
+        * dt {``float``} -- Time over which to integrate
+
+    Keyword Arguments:
+        * steps {``int``} -- Number of step to break the integration down over.
+            Default value is 100.
+
+    """
     vl=M.radians(vl)
-
     vm = M.radians(vm)
-
     vn = M.radians(vn)
 
     dl = 0.5 * vl * dt
@@ -87,20 +100,30 @@ def q_update(qi, vl, vm, vn, dt, *, steps=100):
     else:
         qw = exp_q(dl / steps, dm / steps, dn / steps)
 
-    # combines previous quaternion with small displacement to estimate current attitude
+    # combines previous quaternion with small displacement to estimate current
+    # attitude.
     for _ in range(steps):
         qi = qi * qw
+        qi = qi / np.absolute(qi)
 
-    qc = qi / np.absolute(qi)
     qww = exp_q(dl, dm, dn)
 
-    return (qc, qww)
-
-
-######################################################################################################################
-# this function generates an object used in below function
+    return (qi, qww)
 
 def Omega(w):
+    """
+    Convert a rate of angular rotation into a matrix used for multiplication
+    with quaternions.
+
+    Arguments:
+        * w {``list``} -- Angular velocity 3 vector in (degrees/s)
+
+    Returns:
+        * omega {``array``} -- Quaternion multiplication matrix.
+
+    """
+    assert len(w) == 3, f"{w} is not a valid angular velocity vector."
+
     omega = np.array(
         [
             [0, -w[0], -w[1], -w[2]],
@@ -109,12 +132,27 @@ def Omega(w):
             [w[2], w[1], -w[0], 0],
         ]
     )
-    return(omega)
+    return omega
 
-######################################################################################################################
-# this function uses Runga Kutta 4th order intergrtion to up date a quaternion using angular velocities
 
 def RK4(qi, w1, w2, dt):
+    """
+    Uses 4th Order Runge-Kutta integration to calculate a final attitude from
+    an initial state and angular velocity  measurements.
+
+    Arguments:
+        * qi {``quaternion``} -- The initial attitude quaternion of the system
+        * w1 {``Iter``} -- 3 vector of angular velocity measurement at the
+            beginning of the time step in (degrees/s)
+        * w2 {``Iter``} -- 3 vector of angular velocity measurement at the
+            end of the time step in (degrees/s)
+        * dt {``float``} -- The time step over which to perform the integration
+            in (seconds)
+
+    Returns:
+        * res{``quaternion``} -- Final attitude quaternion of the system.
+
+    """
 
     qt = np.array([qi.w, qi.x, qi.y, qi.z])
     w11 = np.array([M.radians(w1[0]), M.radians(w1[1]), M.radians(w1[2])])
@@ -139,14 +177,16 @@ def RK4(qi, w1, w2, dt):
 
     return(res, qww)
 
-#######################################################################################################################
-# this function takes a gravity vector and converts this into a quaternion
 
 def q_from_g(a_vec):
+    """
+    Calculates the attitude quaternion of a system from a gravity measurment.
+    This
+    """
 
     a_vec[:] = a_vec[:]/(np.linalg.norm(a_vec))
 
-    if np.linalg.norm(np.cross(ag, g))==0:
+    if np.linalg.norm(np.cross(ag, g)) == 0:
         qc = Q.quaternion(1, 0, 0, 0)
     else:
         n = np.cross(ag, g)/np.linalg.norm(np.cross(ag, g))
@@ -164,11 +204,21 @@ def q_from_g(a_vec):
 
     return(qc)
 
-#######################################################################################################################
-# this function turns things into quaternions for compatability reasons
 
 def quaternion(quat):
+    """
+    Produces a quaternion object from a 4 item Iterable with the associated
+    quaternion values (qw, qx, qy, qz).
 
-    q_out = Q.quaternion(*quat)
+    Arguments:
+        * quat {``Iter``} -- len 4 iterable containing the values of the
+            quaternion in the order (qw, qx, qy, qz)
 
-    return q_out
+    Returns:
+        * The quaternion object
+        * return type: ``quaternion``
+
+    """
+    assert len(quat) == 4, f"Failed to provide a valid quaternion."
+
+    return  Q.quaternion(*quat)
