@@ -9,6 +9,10 @@ import math as M
 import quaternion as Q
 
 
+GRAV_MOD = 9.8067
+GRAV_VEC = (0, 1, 0)
+GRAV_ACCEL_VEC = GRAV_MOD * GRAV_VEC
+
 def exp_q(dl, dm, dn):
     """
     Convert an angular velocity vector to a rotation quaternion
@@ -193,25 +197,29 @@ def q_from_g(a_vec):
             is considered the natural vertical coordinate.
 
     """
-    a_vec = a_vec / (np.linalg.norm(a_vec))
+    a_vec = a_vec / np.linalg.norm(a_vec)
 
-    if np.linalg.norm(np.cross(ag, g)) == 0:
+    cross_product = np.cross(a_vec, GRAV_VEC)
+    cross_prod_norm = np.linalg.norm(cross_product)
+
+    if cross_prod_norm == 0:
         qc = Q.quaternion(1, 0, 0, 0)
     else:
-        n = np.cross(ag, g)/np.linalg.norm(np.cross(ag, g))
-        phi = np.arctan(np.linalg.norm(np.cross(ag, g))/np.dot(ag, g))
 
-        if phi<0:
+        n = cross_product / cross_prod_norm
+        phi = np.arctan(cross_prod_norm / np.dot(a_vec, GRAV_VEC))
+
+        if phi < 0:
             phi = phi + np.pi
 
-        qw = np.cos(phi/2)
-        qx = n[0] * np.sin(phi/2)
-        qy = n[1] * np.sin(phi/2)
-        qz = n[2] * np.sin(phi/2)
+        qw = np.cos(phi / 2)
+        qx = n[0] * np.sin(phi / 2)
+        qy = n[1] * np.sin(phi / 2)
+        qz = n[2] * np.sin(phi / 2)
 
         qc = Q.quaternion(qw, qx, qy, qz)
 
-    return(qc)
+    return qc
 
 
 def quaternion(quat):
