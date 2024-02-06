@@ -6,12 +6,13 @@ converting between euler angles and quaternions.
 
 import numpy as np
 import math as M
-import quaternion as Q
+from quaternion import Quaternion
 
 
 GRAV_MOD = 9.8067
-GRAV_VEC = (0, 1, 0)
+GRAV_VEC = np.array([0, 1, 0])
 GRAV_ACCEL_VEC = GRAV_MOD * GRAV_VEC
+
 
 def exp_q(dl, dm, dn):
     """
@@ -29,14 +30,14 @@ def exp_q(dl, dm, dn):
     n = [dl, dm, dn]
     n_norm = np.linalg.norm(n)
     if n_norm == 0:
-        quat = Q.quaternion(1, 0, 0, 0)
+        quat = Quaternion(1, 0, 0, 0)
     else:
         qw = np.cos(n_norm)
         qx = (dl / n_norm) * np.sin(n_norm)
         qy = (dm / n_norm) * np.sin(n_norm)
         qz = (dn / n_norm) * np.sin(n_norm)
 
-        quat = Q.quaternion(qw, qx, qy, qz)
+        quat = Quaternion(qw, qx, qy, qz)
 
     return quat
 
@@ -56,7 +57,7 @@ def eul_from_q(quat):
     l = M.degrees(
         M.atan2(
             2 * (quat.w * quat.x + quat.y * quat.z),
-            (1 - 2 * (quat.x**2 + quat.y**2))
+            (1 - 2 * (quat.x**2 + quat.y**2)),
         )
     )
     m = M.degrees(M.asin(2 * (quat.w * quat.y - quat.z * quat.x)))
@@ -64,7 +65,7 @@ def eul_from_q(quat):
     n = M.degrees(
         M.atan2(
             2 * (quat.w * quat.z + quat.x * quat.y),
-            (1 - 2 * (quat.y**2 + quat.z**2))
+            (1 - 2 * (quat.y**2 + quat.z**2)),
         )
     )
 
@@ -88,7 +89,7 @@ def q_update(qi, vl, vm, vn, dt, *, steps=100):
             Default value is 100.
 
     """
-    vl=M.radians(vl)
+    vl = M.radians(vl)
     vm = M.radians(vm)
     vn = M.radians(vn)
 
@@ -100,7 +101,7 @@ def q_update(qi, vl, vm, vn, dt, *, steps=100):
     w_norm = np.linalg.norm(w)
 
     if w_norm == 0:
-        qw = Q.quaternion(1, 0, 0, 0)
+        qw = Quaternion(1, 0, 0, 0)
     else:
         qw = exp_q(dl / steps, dm / steps, dn / steps)
 
@@ -113,6 +114,7 @@ def q_update(qi, vl, vm, vn, dt, *, steps=100):
     qww = exp_q(dl, dm, dn)
 
     return (qi, qww)
+
 
 def Omega(w):
     """
@@ -170,16 +172,16 @@ def RK4(qi, w1, w2, dt):
     q4 = qt + dt * k3
     k4 = 0.5 * Omega(w22) @ q4
 
-    qft = qt + (dt/6) * (k1 + 2 * k2 + 2 * k3 + k4)
+    qft = qt + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
 
-    qf = qft/np.linalg.norm(qft)
+    qf = qft / np.linalg.norm(qft)
 
-    res = Q.quaternion(*qf)
+    res = Quaternion(*qf)
 
     w = 0.5 * (w11 + w22)
     qww = exp_q(*w)
 
-    return(res, qww)
+    return (res, qww)
 
 
 def q_from_g(a_vec):
@@ -203,9 +205,8 @@ def q_from_g(a_vec):
     cross_prod_norm = np.linalg.norm(cross_product)
 
     if cross_prod_norm == 0:
-        qc = Q.quaternion(1, 0, 0, 0)
+        qc = Quaternion(1, 0, 0, 0)
     else:
-
         n = cross_product / cross_prod_norm
         phi = np.arctan(cross_prod_norm / np.dot(a_vec, GRAV_VEC))
 
@@ -217,7 +218,7 @@ def q_from_g(a_vec):
         qy = n[1] * np.sin(phi / 2)
         qz = n[2] * np.sin(phi / 2)
 
-        qc = Q.quaternion(qw, qx, qy, qz)
+        qc = Quaternion(qw, qx, qy, qz)
 
     return qc
 
@@ -237,4 +238,4 @@ def quaternion(quat):
     """
     assert len(quat) == 4, f"Failed to provide a valid quaternion."
 
-    return  Q.quaternion(*quat)
+    return Quaternion(*quat)

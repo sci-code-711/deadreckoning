@@ -10,7 +10,7 @@ import pandas as pd
 
 
 def arg_parser():
-    """ Command line argument parser """
+    """Command line argument parser"""
 
     parser = ArgumentParser(
         "low pass filter an IMU file by taking moving averages of measurements."
@@ -40,15 +40,15 @@ def arg_parser():
 
 
 def main():
-    """ Main program. """
+    """Main program."""
 
     # parse command line arguments
     args = arg_parser()
 
-    data = [] # create array in which data will be stored
+    data = []  # create array in which data will be stored
     with open(args.in_file) as csv_file:
         # opens file for use and enters it into array
-        data = pd.read_csv(csv_file, delimiter=',', skiprows=[2])
+        data = pd.read_csv(csv_file, delimiter=",", skiprows=[2])
 
     # extracts parameter for length of data table
     length = data.shape[0]
@@ -60,7 +60,7 @@ def main():
     print(
         f"Filtering will take a moving average of {2 * args.filt_range + 1} "
         f"measurements."
-        )
+    )
 
     columns_to_filter = list(range(1, 7))
 
@@ -72,8 +72,8 @@ def main():
             filt_data.iloc[0, 1:] = tot / (args.filt_range + 1)
 
         elif r < args.filt_range + 1:
-            tot = tot+data.iloc[r + args.filt_range, 1:]
-            filt_data.iloc[r, 1:]=tot / (r + args.filt_range + 1)
+            tot = tot + data.iloc[r + args.filt_range, 1:]
+            filt_data.iloc[r, 1:] = tot / (r + args.filt_range + 1)
 
         elif r > length - args.filt_range - 1:
             tot = tot - data.iloc[r - args.filt_range - 1, 1:]
