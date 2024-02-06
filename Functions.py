@@ -14,64 +14,6 @@ GRAV_VEC = np.array([0, 1, 0])
 GRAV_ACCEL_VEC = GRAV_MOD * GRAV_VEC
 
 
-def exp_q(dl, dm, dn):
-    """
-    Convert an angular velocity vector to a rotation quaternion
-
-    Arguments:
-        * dl {``float``} -- Rate of rotation about x axis
-        * dm {``float``} -- Rate of rotation about y axis
-        * dn {``float``} -- Rate of rotation about z axis
-
-    Returns:
-        ``quaternion`` -- Rotation quaternion
-
-    """
-    n = [dl, dm, dn]
-    n_norm = np.linalg.norm(n)
-    if n_norm == 0:
-        quat = Quaternion(1, 0, 0, 0)
-    else:
-        qw = np.cos(n_norm)
-        qx = (dl / n_norm) * np.sin(n_norm)
-        qy = (dm / n_norm) * np.sin(n_norm)
-        qz = (dn / n_norm) * np.sin(n_norm)
-
-        quat = Quaternion(qw, qx, qy, qz)
-
-    return quat
-
-
-def eul_from_q(quat):
-    """
-    Convert a rotation quaternion into a set of euler angles: (yaw, pitch, and
-    roll)
-
-    Arguments:
-        * quat {``quaternion``} -- Quaternion to be converted
-
-    Returns:
-        ``tuple`` -- A tuple of the form (yaw, pitch, roll)
-
-    """
-    l = M.degrees(
-        M.atan2(
-            2 * (quat.w * quat.x + quat.y * quat.z),
-            (1 - 2 * (quat.x**2 + quat.y**2)),
-        )
-    )
-    m = M.degrees(M.asin(2 * (quat.w * quat.y - quat.z * quat.x)))
-
-    n = M.degrees(
-        M.atan2(
-            2 * (quat.w * quat.z + quat.x * quat.y),
-            (1 - 2 * (quat.y**2 + quat.z**2)),
-        )
-    )
-
-    return (l, m, n)
-
-
 def q_update(qi, vl, vm, vn, dt, *, steps=100):
     """
     Integrate a rate of change of euler angles over a time step dt to find a new
@@ -103,7 +45,7 @@ def q_update(qi, vl, vm, vn, dt, *, steps=100):
     if w_norm == 0:
         qw = Quaternion(1, 0, 0, 0)
     else:
-        qw = exp_q(dl / steps, dm / steps, dn / steps)
+        qw = Quaternion.from_eul_angles(dl / steps, dm / steps, dn / steps)
 
     # combines previous quaternion with small displacement to estimate current
     # attitude.
@@ -111,7 +53,7 @@ def q_update(qi, vl, vm, vn, dt, *, steps=100):
         qi = qi * qw
         qi = qi / np.absolute(qi)
 
-    qww = exp_q(dl, dm, dn)
+    qww = Quaternion.from_eul_angles(dl, dm, dn)
 
     return (qi, qww)
 
@@ -179,7 +121,7 @@ def RK4(qi, w1, w2, dt):
     res = Quaternion(*qf)
 
     w = 0.5 * (w11 + w22)
-    qww = exp_q(*w)
+    qww = Quaternion.from_eul_angles(*w)
 
     return (res, qww)
 
@@ -221,21 +163,3 @@ def q_from_g(a_vec):
         qc = Quaternion(qw, qx, qy, qz)
 
     return qc
-
-
-def quaternion(quat):
-    """
-    Produces a quaternion object from a 4 item Iterable with the associated
-    quaternion values (qw, qx, qy, qz).
-
-    Arguments:
-        * quat {``Iter``} -- len 4 iterable containing the values of the
-            quaternion in the order (qw, qx, qy, qz)
-
-    Returns:
-        ``quaternion`` -- The quaternion object
-
-    """
-    assert len(quat) == 4, f"Failed to provide a valid quaternion."
-
-    return Quaternion(*quat)

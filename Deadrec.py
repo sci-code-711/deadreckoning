@@ -125,7 +125,7 @@ P.loc[0, "az"] = round(
 )  # removes gravitiational accceleration from readings
 
 # converts initial rotation quaternian into euler angles and inputs them into data frame
-[l, m, n] = func.eul_from_q(qc)
+[l, m, n] = qc.to_euler_angles()
 P.loc[0, "L"] = round(l, 3)
 P.loc[0, "M"] = round(m, 3)
 P.loc[0, "N"] = round(n, 3)
@@ -156,7 +156,7 @@ for r in range(1, numRows):
     qcc = np.conjugate(qc)
 
     # converts roatation quaternian into euler angles
-    [l, m, n] = func.eul_from_q(qc)
+    [l, m, n] = qc.to_euler_angles()
     P.loc[r, "L"] = round(l, 6)
     P.loc[r, "M"] = round(m, 6)
     P.loc[r, "N"] = round(n, 6)

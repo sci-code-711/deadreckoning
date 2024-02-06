@@ -62,8 +62,6 @@ def main():
         f"measurements."
     )
 
-    columns_to_filter = list(range(1, 7))
-
     tot = 0
     for r in range(length):
         if r == 0:
