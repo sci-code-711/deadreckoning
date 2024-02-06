@@ -1,0 +1,3 @@
+# ignore temporary files
+temp*
+**/__pycache__/**
