@@ -2,6 +2,7 @@ from quaternion import Quaternion
 import numpy as np
 import pytest
 
+
 def test_quaternion_init():
     quat = Quaternion(1, 2, 3, 4)
 
@@ -15,6 +16,10 @@ def test_quaternion_str():
     quat = Quaternion(1, 2, 3, 4)
 
     assert str(quat) == "Quaternion (1, 2i, 3j, 4k)"
+
+
+def test_quaternion_repr():
+    assert Quaternion.__repr__ == Quaternion.__str__
 
 
 def test_quaternion_eq_and_neq():
@@ -51,7 +56,7 @@ def test_quaternion_sub():
     quat_2 = Quaternion(2, 3, 1, 2)
 
     assert (quat_1 - quat_2) == Quaternion(-1, -1, 2, 2)
-    assert (quat_1 - quat_2) ==  - (quat_2 - quat_1)
+    assert (quat_1 - quat_2) == -(quat_2 - quat_1)
 
 
 def test_quaternion_rsub():
@@ -80,12 +85,18 @@ def test_quaternion_mul():
 
     assert quat_1 * Quaternion(2, 3, 7, -3) == Quaternion(-13, -30, 31, 10)
 
+    with pytest.raises(TypeError):
+        Quaternion(1, 2, 3, 4) * "test"
+
 
 def test_quaternion_rmul():
     quat_1 = Quaternion(1, 2, 3, 4)
 
     assert 3 * quat_1 == Quaternion(3, 6, 9, 12)
     assert 3.0 * quat_1 == Quaternion(3, 6, 9, 12)
+
+    with pytest.raises(TypeError):
+        "test" * quat_1
 
 
 def test_quaternion_abs():
@@ -100,7 +111,7 @@ def test_quaternion_abs():
 
 
 def test_quaternion_conjugate():
-   assert Quaternion(1, 2, 3, 4).conjugate() == Quaternion(1, -2, -3, -4)
+    assert Quaternion(1, 2, 3, 4).conjugate() == Quaternion(1, -2, -3, -4)
 
 
 def test_quaternion_len():
@@ -110,11 +121,27 @@ def test_quaternion_len():
 
 
 def test_quaternion_neg():
-    assert - Quaternion(1, -2, -3, 4) == Quaternion(-1, 2, 3, -4)
+    assert -Quaternion(1, -2, -3, 4) == Quaternion(-1, 2, 3, -4)
 
 
 def test_quaternion_to_euler_angles():
-    assert True
+    assert Quaternion(1, 0, 0, 0).to_euler_angles() == (0, 0, 0)
+
+    assert Quaternion(0, 1, 0, 0).to_euler_angles() == (np.pi, 0, 0)
+
+    # Fun quirk of euler angles (np.pi, 0, np.pi) == (0, np.pi, 0)
+    assert Quaternion(0, 0, 1, 0).to_euler_angles() == (np.pi, 0, np.pi)
+
+    assert Quaternion(0, 0, 0, 1).to_euler_angles() == (0, 0, np.pi)
+
+    assert Quaternion(0, 1 / np.sqrt(2), 1 / np.sqrt(2), 0).to_euler_angles() == (
+        np.pi,
+        0.0,
+        pytest.approx(np.pi / 2),
+    )
+
+    with pytest.raises(ValueError):
+        Quaternion(2, 3, 4, 0).to_euler_angles()
 
 
 def test_quaternion_from_euler_angles():
@@ -142,7 +169,5 @@ def test_quaternion_from_euler_angles():
     )
 
     assert Quaternion.from_eul_angles(
-            np.pi / np.sqrt(2), np.pi / np.sqrt(2), 0
-        ) == Quaternion(
-            pytest.approx(-1), pytest.approx(0), pytest.approx(0), 0
-        )
+        np.pi / np.sqrt(2), np.pi / np.sqrt(2), 0
+    ) == Quaternion(pytest.approx(-1), pytest.approx(0), pytest.approx(0), 0)
