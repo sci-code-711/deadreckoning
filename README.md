@@ -1,7 +1,7 @@
 # Deadreckoning
 A set of tools to reconstruct trajectorys from Inertial Motion Unit measurements (Gyroscope and Accelerometer). 
 
-## Functionailty:
+## Functionality:
 - `quaternion.py` - An implimentation of quaternions for sue in attitude estimation see: [wiki:Quaternion](https://en.wikipedia.org/wiki/Quaternion)
 - `Deadreckoning.py` - An implimentation of simple deadreckoning by directly intergating measurements
 - `EKF.py` - A refined deadreckoning implimentation that uses prior gravity vector measurments to correct the attitude estimation via Extended Kalman Filtering (EKF)
