@@ -1,4 +1,4 @@
-# deadreckoning
+# Deadreckoning
 "Trajectory reconstruction using Inertial Motion Units (IMUs) and the implications for Aerobots on Venus."
 
 Included are:
