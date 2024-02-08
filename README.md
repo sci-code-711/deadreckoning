@@ -1,29 +1,24 @@
 # Deadreckoning
-"Trajectory reconstruction using Inertial Motion Units (IMUs) and the implications for Aerobots on Venus."
+A set of tools to reconstruct trajectorys from Inertial Motion Unit measurements (Gyroscope and Accelerometer). 
 
-Included are:
-3 working copies of the dead reckoning code used during this project
-- "Deadreckoning.py"
-- "EKF.py"
-- "EKF_fut.py"
+## Functionailty:
+- `quaternion.py` - An implimentation of quaternions for sue in attitude estimation see: [wiki:Quaternion](https://en.wikipedia.org/wiki/Quaternion)
+- `Deadreckoning.py` - An implimentation of simple deadreckoning by directly intergating measurements
+- `EKF.py` - A refined deadreckoning implimentation that uses prior gravity vector measurments to correct the attitude estimation via Extended Kalman Filtering (EKF)
+- `EKF_fut.py` - An EKF implimentaion that uses prior and future gavity measurements to correct the attitude.
 
-Required Packages:
+## Required Packages:
 - Pandas
 - Numpy
 - matplotlib
 - pytest
 
-with a working control space that integrates data processing capabilities "~Deadreckoning_interface.ipynb"
+## Details:
 
-along with a set of example data "example_data.csv".
+The mathematical basis for the trajectory reconstruction methods used here cna be found in the [accompanying paper](https://github.com/sci-code-711/deadreckoning/blob/main/A035_paper.pdf).
 
-Additionally an implementation of a multi positional calibration procedure for a 6 axis IMU. "~calibration_notebook.ipynb"
+The research for this paper was conducted using a 6 axis LSM6SD3 IMU embedded on a Arduino 33Iot board.
 
-The research was completed using a 6 axis LSM6SD3 embedded on a Arduino 33Iot board.
-
-for more details read the full report saved as "A035_paper.pdf"
-
-
-Bibliography:
+## Bibliography:
 
 [1] D. Tedaldi, A. Pretto, and E. Menegatti, A robust and easy to implement method for imu calibration without external equipments, 2014.
