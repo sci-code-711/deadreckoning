@@ -6,7 +6,7 @@ converting between euler angles and quaternions.
 
 import numpy as np
 import math as M
-from quaternion import Quaternion
+from deadrec.quaternion import Quaternion
 
 
 GRAV_MOD = 9.8067

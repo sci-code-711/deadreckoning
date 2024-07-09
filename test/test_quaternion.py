@@ -1,4 +1,4 @@
-from quaternion import Quaternion
+from deadrec.quaternion import Quaternion
 import numpy as np
 import pytest
 

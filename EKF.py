@@ -5,7 +5,7 @@
 
 import pandas as pd
 import numpy as np
-from quaternion import Quaternion
+from deadrec.quaternion import Quaternion
 import Functions as func
 
 #######################################################################################################################
@@ -125,7 +125,7 @@ P.loc[0, "M"] = round(m, 3)
 P.loc[0, "N"] = round(n, 3)
 
 #######################################################################################################################
-# this section of the code iterates row by row through the data table calculating attitude, rotating acceleration 
+# this section of the code iterates row by row through the data table calculating attitude, rotating acceleration
 # readings into the navigation frame, and removing gravitational effects. the code then integrates linear accelerations to
 # velocities and in turn displacements.
 count = 0

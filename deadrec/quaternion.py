@@ -9,7 +9,7 @@ import math
 class Quaternion:
     def __init__(self, w, x, y, z):
         """
-        Arguments:
+        Args:
             * w {``number``} -- The real part of the quaternion
             * x {``number``} -- The x component of the quaternion
             * y {``number``} -- The y component of the quaternion
@@ -35,8 +35,8 @@ class Quaternion:
 
     def __eq__(self, other):
         """
-        Test the equality of one quaternion to another. If one of the types isn't
-        a quaternion it will return false.
+        Test the equality of one quaternion to another. If one of the types
+        isn't a quaternion it will return false.
 
         """
         if type(other) != Quaternion:
@@ -53,11 +53,15 @@ class Quaternion:
         """Add two quaternions together."""
         if type(other) != Quaternion:
             raise TypeError(
-                f"Addition is not defined for types Quaternion and {type(other)}"
+                f"Addition is not defined for types Quaternion and "
+                f"{type(other)}"
             )
 
         return Quaternion(
-            self.w + other.w, self.x + other.x, self.y + other.y, self.z + other.z
+            self.w + other.w,
+            self.x + other.x,
+            self.y + other.y,
+            self.z + other.z
         )
 
     __radd__ = __add__
@@ -69,7 +73,8 @@ class Quaternion:
     def __rsub__(self, other):
         """This is just to customise our Error message"""
         raise TypeError(
-            f"Subtraction is not defined for types Quaternion and {type(other)}"
+            f"Subtraction is not defined for types Quaternion and "
+            f"{type(other)}"
         )
 
     def __iadd__(self, other):
@@ -106,7 +111,8 @@ class Quaternion:
             )
 
         raise TypeError(
-            f"Multiplication is not supported between types Quaternion and {type(other)}"
+            f"Multiplication is not supported between types Quaternion and "
+            f"{type(other)}"
         )
 
     def __rmul__(self, other):
@@ -115,7 +121,8 @@ class Quaternion:
             return Quaternion.__mul__(self, other)
 
         raise TypeError(
-            f"Multiplication is not supported between types Quaternion and {type(other)}"
+            f"Multiplication is not supported between types Quaternion and "
+            f"{type(other)}"
         )
 
     def __abs__(self):

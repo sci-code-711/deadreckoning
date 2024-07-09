@@ -5,7 +5,7 @@
 
 import pandas as pd
 import numpy as np
-from quaternion import Quaternion
+from deadrec.quaternion import Quaternion
 import Functions as func
 
 #######################################################################################################################
