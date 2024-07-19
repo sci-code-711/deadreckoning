@@ -1,7 +1,8 @@
 from .runners import Runner, TerminateSignal
 from multiprocessing import Queue
+from abc import ABC, abstractmethod
 
-class Transformer(Runner):
+class TransformerBase(Runner, ABC):
     def __init__(self, i_stream: Queue, o_stream: Queue):
         self.i_stream = i_stream
         self.o_stream = o_stream
@@ -22,5 +23,6 @@ class Transformer(Runner):
 
         return True
 
-    def transformation():
+    @abstractmethod
+    def transformation(item):
         pass

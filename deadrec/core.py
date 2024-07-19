@@ -1,8 +1,8 @@
 from multiprocessing import Process, Queue
-from .transformers import Transformer
+from .transformers import TransformerBase
 from typing import List
 
-class DefaultTransformer(Transformer):
+class DefaultTransformer(TransformerBase):
     def transformation(self, item):
         return item
 
@@ -10,19 +10,12 @@ class Core:
     def __init__(self, name: str):
         self.name = name
         self.transformer = DefaultTransformer
-
         self.connectors: List[Process] = []
-
-    def set_input_stream(self, stream: Queue):
-        self.i_stream = stream
 
     def set_input_connector(self, connector: Process):
         self.i_connector = connector
         self.i_stream = self.i_connector.output_stream
         self.connectors.append(connector)
-
-    def set_output_stream(self, stream: Queue):
-        self.o_stream = stream
 
     def set_output_connector(self, connector: Process):
         self.o_connector = connector

@@ -1,6 +1,5 @@
-from multiprocessing import Process, Queue, Value
+from multiprocessing import Queue
 from .runners import Runner, TerminateSignal
-from time import sleep
 
 class Connector(Runner):
     pass
@@ -52,10 +51,3 @@ class ToCSV(OutputConnector):
                 csv_file.write(parsed_row + "\n")
 
         print(f"Completed CSV file write")
-
-    def kill(self):
-        print("making kill checks")
-        while not self.input_stream.empty():
-            sleep(0.1)
-        print("kill checks passed")
-        super().kill()
