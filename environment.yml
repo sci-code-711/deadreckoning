@@ -1,0 +1,10 @@
+name: deadreckoning
+channels:
+  - conda-forge
+dependencies:
+  - python==3.12.1
+  - pandas
+  - numpy
+  - matplotlib
+  - pytest
+  - black
