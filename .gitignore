@@ -1,3 +1,6 @@
 # ignore temporary files
 temp*
 **/__pycache__/**
+
+# uv
+.venv/
