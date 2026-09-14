@@ -13,7 +13,7 @@ class TransformerBase(Runner, ABC):
         count = 0
         while True:
             item = self.i_stream.get()
-            if type(item) == TerminateSignal:
+            if isinstance(item, TerminateSignal):
                 self.o_stream.put(item)
                 break
 

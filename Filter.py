@@ -30,9 +30,9 @@ def arg_parser():
         default=2,
         type=int,
         help=(
-            f"The range over which to average eg. '--filt_range=2' corresponds "
-            f"to each filtered measurement being the average of the bin itself "
-            f"and the bins either side within a range of 2."
+            "The range over which to average eg. '--filt_range=2' corresponds "
+            "to each filtered measurement being the average of the bin itself "
+            "and the bins either side within a range of 2."
         ),
     )
 

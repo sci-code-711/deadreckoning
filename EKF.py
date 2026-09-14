@@ -115,8 +115,8 @@ P.loc[0, "ay"] = A.y
 P.loc[0, "az"] = A.z - grav_accel  # removes gravitational acceleration from readings
 
 # converts initial rotation quaternion into euler angles and inputs them into data frame
-[l, m, n] = qc.to_euler_angles()
-P.loc[0, "L"] = round(l, 3)
+[phi, m, n] = qc.to_euler_angles()
+P.loc[0, "L"] = round(phi, 3)
 P.loc[0, "M"] = round(m, 3)
 P.loc[0, "N"] = round(n, 3)
 
@@ -227,8 +227,8 @@ for r in range(1, num_rows):
     P.loc[r, "qz"] = round(qc.z, 10)
 
     # converts rotation quaternion into euler angles
-    [l, m, n] = qc.to_euler_angles()
-    P.loc[r, "L"] = round(l, 6)
+    [phi, m, n] = qc.to_euler_angles()
+    P.loc[r, "L"] = round(phi, 6)
     P.loc[r, "M"] = round(m, 6)
     P.loc[r, "N"] = round(n, 6)
 

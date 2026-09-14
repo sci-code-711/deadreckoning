@@ -1,4 +1,4 @@
-from multiprocessing import Process, Queue
+from multiprocessing import Process
 from .transformers import TransformerBase
 from typing import List
 

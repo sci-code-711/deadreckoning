@@ -30,7 +30,7 @@ class FromCSV(IngestConnector):
                 row = line.rstrip().split(self.delimiter)
                 self.output_stream.put(row)
 
-        print(f"Completed reading CSV file")
+        print("Completed reading CSV file")
         self.output_stream.put(TerminateSignal(True, None))
 
         return True
@@ -46,10 +46,10 @@ class ToCSV(OutputConnector):
         with open(self.file_handle, "w") as csv_file:
             while True:
                 item = self.input_stream.get()
-                if type(item) == TerminateSignal:
+                if isinstance(item, TerminateSignal):
                     break
 
                 parsed_row = self.delimiter.join(item)
                 csv_file.write(parsed_row + "\n")
 
-        print(f"Completed CSV file write")
+        print("Completed CSV file write")
