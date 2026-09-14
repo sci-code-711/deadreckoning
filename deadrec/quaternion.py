@@ -2,6 +2,7 @@
 A module to handle all things Quaternion related.
 
 """
+
 import numpy as np
 import math
 
@@ -42,27 +43,14 @@ class Quaternion:
         if type(other) != Quaternion:
             return False
 
-        return (
-            self.w == other.w
-            and self.x == other.x
-            and self.y == other.y
-            and self.z == other.z
-        )
+        return self.w == other.w and self.x == other.x and self.y == other.y and self.z == other.z
 
     def __add__(self, other):
         """Add two quaternions together."""
         if type(other) != Quaternion:
-            raise TypeError(
-                f"Addition is not defined for types Quaternion and "
-                f"{type(other)}"
-            )
+            raise TypeError(f"Addition is not defined for types Quaternion and {type(other)}")
 
-        return Quaternion(
-            self.w + other.w,
-            self.x + other.x,
-            self.y + other.y,
-            self.z + other.z
-        )
+        return Quaternion(self.w + other.w, self.x + other.x, self.y + other.y, self.z + other.z)
 
     __radd__ = __add__
 
@@ -72,10 +60,7 @@ class Quaternion:
 
     def __rsub__(self, other):
         """This is just to customise our Error message"""
-        raise TypeError(
-            f"Subtraction is not defined for types Quaternion and "
-            f"{type(other)}"
-        )
+        raise TypeError(f"Subtraction is not defined for types Quaternion and {type(other)}")
 
     def __iadd__(self, other):
         return Quaternion.__add__(self, other)
@@ -86,33 +71,18 @@ class Quaternion:
 
         """
         if type(other) == float or type(other) == int:
-            return Quaternion(
-                self.w * other, self.x * other, self.y * other, self.z * other
-            )
+            return Quaternion(self.w * other, self.x * other, self.y * other, self.z * other)
 
         if type(other) == Quaternion:
             return Quaternion(
-                self.w * other.w
-                - self.x * other.x
-                - self.y * other.y
-                - self.z * other.z,
-                self.w * other.x
-                + self.x * other.w
-                + self.y * other.z
-                - self.z * other.y,
-                self.w * other.y
-                - self.x * other.z
-                + self.y * other.w
-                + self.z * other.x,
-                self.w * other.z
-                + self.x * other.y
-                - self.y * other.x
-                + self.z * other.w,
+                self.w * other.w - self.x * other.x - self.y * other.y - self.z * other.z,
+                self.w * other.x + self.x * other.w + self.y * other.z - self.z * other.y,
+                self.w * other.y - self.x * other.z + self.y * other.w + self.z * other.x,
+                self.w * other.z + self.x * other.y - self.y * other.x + self.z * other.w,
             )
 
         raise TypeError(
-            f"Multiplication is not supported between types Quaternion and "
-            f"{type(other)}"
+            f"Multiplication is not supported between types Quaternion and {type(other)}"
         )
 
     def __rmul__(self, other):
@@ -121,8 +91,7 @@ class Quaternion:
             return Quaternion.__mul__(self, other)
 
         raise TypeError(
-            f"Multiplication is not supported between types Quaternion and "
-            f"{type(other)}"
+            f"Multiplication is not supported between types Quaternion and {type(other)}"
         )
 
     def __abs__(self):

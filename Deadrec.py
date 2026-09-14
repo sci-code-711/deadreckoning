@@ -15,14 +15,10 @@ import Functions as func
 
 data = []
 with open("Temp_calib_data.csv") as file:
-    data = pd.read_csv(
-        file, delimiter=",", skiprows=0
-    )  # opens data file as an array
+    data = pd.read_csv(file, delimiter=",", skiprows=0)  # opens data file as an array
 
 numRows = data.shape[0]
-P = pd.DataFrame(
-    index=range(numRows), columns=range(20)
-)  # generates expanded data frame
+P = pd.DataFrame(index=range(numRows), columns=range(20))  # generates expanded data frame
 P.iloc[0, 7:20] = 0  # sets initial values for displacements and velocities to 0
 P.columns = [
     "t",
@@ -46,9 +42,7 @@ P.columns = [
     "qy",
     "qz",
 ]  # adds indexes to data frame
-P.update(
-    data
-)  # Inserts IMU data into  expanded Data frame using indices as references
+P.update(data)  # Inserts IMU data into  expanded Data frame using indices as references
 
 
 #######################################################################################################################
@@ -120,9 +114,7 @@ A = qc * a * qcc
 # extracts rotated accelerations and inserts them into data frame
 P.loc[0, "ax"] = round(A.x, 3)
 P.loc[0, "ay"] = round(A.y, 3)
-P.loc[0, "az"] = round(
-    A.z - gsize, 3
-)  # removes gravitiational accceleration from readings
+P.loc[0, "az"] = round(A.z - gsize, 3)  # removes gravitiational accceleration from readings
 
 # converts initial rotation quaternian into euler angles and inputs them into data frame
 [l, m, n] = qc.to_euler_angles()

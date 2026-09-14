@@ -13,9 +13,10 @@ Dependencies are managed with [uv](https://docs.astral.sh/uv/) and declared
 in `pyproject.toml`.
 
 ```bash
-uv sync            # install dependencies into .venv
-uv run ruff check . # lint
-uv run pytest       # run tests
+uv sync              # install dependencies into .venv
+uv run ruff check .  # lint
+uv run ruff format . # format
+uv run pytest        # run tests
 ```
 
 ## Details:

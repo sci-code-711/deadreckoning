@@ -2,6 +2,7 @@ from .runners import Runner, TerminateSignal
 from multiprocessing import Queue
 from abc import ABC, abstractmethod
 
+
 class TransformerBase(Runner, ABC):
     def __init__(self, i_stream: Queue, o_stream: Queue):
         self.i_stream = i_stream

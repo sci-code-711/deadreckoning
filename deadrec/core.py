@@ -2,9 +2,11 @@ from multiprocessing import Process, Queue
 from .transformers import TransformerBase
 from typing import List
 
+
 class DefaultTransformer(TransformerBase):
     def transformation(self, item):
         return item
+
 
 class Core:
     def __init__(self, name: str):
@@ -23,9 +25,7 @@ class Core:
         self.connectors.append(connector)
 
     def launch(self):
-        self.transformer_instance = self.transformer(
-            self.i_stream, self.o_stream
-        )
+        self.transformer_instance = self.transformer(self.i_stream, self.o_stream)
         for connector in self.connectors[::-1]:
             connector.start()
         self.transformer_instance.start()

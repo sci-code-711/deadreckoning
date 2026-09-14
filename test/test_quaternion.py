@@ -168,6 +168,6 @@ def test_quaternion_from_euler_angles():
         Quaternion(pytest.approx(0), 0, 0, pytest.approx(-1))
     )
 
-    assert Quaternion.from_eul_angles(
-        np.pi / np.sqrt(2), np.pi / np.sqrt(2), 0
-    ) == Quaternion(pytest.approx(-1), pytest.approx(0), pytest.approx(0), 0)
+    assert Quaternion.from_eul_angles(np.pi / np.sqrt(2), np.pi / np.sqrt(2), 0) == Quaternion(
+        pytest.approx(-1), pytest.approx(0), pytest.approx(0), 0
+    )

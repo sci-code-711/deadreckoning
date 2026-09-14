@@ -57,10 +57,7 @@ def main():
     filt_data = data.copy()
 
     # specifies number of bins either side to average over
-    print(
-        f"Filtering will take a moving average of {2 * args.filt_range + 1} "
-        f"measurements."
-    )
+    print(f"Filtering will take a moving average of {2 * args.filt_range + 1} measurements.")
 
     tot = 0
     for r in range(length):

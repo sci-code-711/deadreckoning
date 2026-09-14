@@ -21,8 +21,10 @@ measurements.
 ## Tooling
 
 - **Package management:** [uv](https://docs.astral.sh/uv/). Dependencies and
-  dev tools are declared in `pyproject.toml`.
-- **Linting:** [ruff](https://docs.astral.sh/ruff/).
+  dev tools are declared in `pyproject.toml`; the default Python version is
+  pinned in `.python-version`.
+- **Linting & formatting:** [ruff](https://docs.astral.sh/ruff/) (`ruff
+  check` for lint, `ruff format` for formatting — both enforced in CI).
 - **Testing:** [pytest](https://docs.pytest.org/).
 
 ## Common commands
@@ -41,6 +43,10 @@ uv run ruff check .
 # Auto-fix lint issues where possible
 uv run ruff check --fix .
 
+# Format (and check formatting without writing changes)
+uv run ruff format .
+uv run ruff format --check .
+
 # Run the test suite
 uv run pytest
 ```
@@ -50,8 +56,8 @@ uv run pytest
 - Always use `uv run <cmd>` (or `uv sync` first) rather than invoking
   `python`/`pytest`/`ruff` directly, so the correct locked environment is
   used.
-- Run `uv run ruff check .` and `uv run pytest` before considering a change
-  complete.
+- Run `uv run ruff check .`, `uv run ruff format --check .`, and
+  `uv run pytest` before considering a change complete.
 - The root-level `.py` scripts and notebooks are legacy/exploratory and
   carry pre-existing lint issues; don't fix unrelated lint findings outside
   the files you're already touching.

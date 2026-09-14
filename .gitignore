@@ -4,3 +4,7 @@ temp*
 
 # uv
 .venv/
+
+# tool caches
+.pytest_cache/
+.ruff_cache/

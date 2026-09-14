@@ -1,8 +1,10 @@
 from multiprocessing import Queue
 from .runners import Runner, TerminateSignal
 
+
 class Connector(Runner):
     pass
+
 
 class IngestConnector(Connector):
     def __init__(self):
