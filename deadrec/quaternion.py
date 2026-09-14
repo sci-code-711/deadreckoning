@@ -39,6 +39,12 @@ class Quaternion:
         Test the equality of one quaternion to another. If one of the types
         isn't a quaternion it will return false.
 
+        Args:
+            * other {``any``} -- The object to compare against.
+
+        Returns:
+            * {``bool``} -- Whether the two quaternions are equal.
+
         """
         if not isinstance(other, Quaternion):
             return False
@@ -46,7 +52,16 @@ class Quaternion:
         return self.w == other.w and self.x == other.x and self.y == other.y and self.z == other.z
 
     def __add__(self, other):
-        """Add two quaternions together."""
+        """
+        Add two quaternions together.
+
+        Args:
+            * other {``Quaternion``} -- The quaternion to add.
+
+        Returns:
+            * {``Quaternion``} -- The sum of the two quaternions.
+
+        """
         if not isinstance(other, Quaternion):
             raise TypeError(f"Addition is not defined for types Quaternion and {type(other)}")
 
@@ -55,7 +70,16 @@ class Quaternion:
     __radd__ = __add__
 
     def __sub__(self, other):
-        """Subtract one quaternion from another."""
+        """
+        Subtract one quaternion from another.
+
+        Args:
+            * other {``Quaternion``} -- The quaternion to subtract.
+
+        Returns:
+            * {``Quaternion``} -- The difference of the two quaternions.
+
+        """
         return Quaternion.__add__(self, -other)
 
     def __rsub__(self, other):
@@ -63,11 +87,28 @@ class Quaternion:
         raise TypeError(f"Subtraction is not defined for types Quaternion and {type(other)}")
 
     def __iadd__(self, other):
+        """
+        Add another quaternion to this one in place.
+
+        Args:
+            * other {``Quaternion``} -- The quaternion to add.
+
+        Returns:
+            * {``Quaternion``} -- The sum of the two quaternions.
+
+        """
         return Quaternion.__add__(self, other)
 
     def __mul__(self, other):
         """
         Multiply a quaternion by another quaternion or a scalar factor.
+
+        Args:
+            * other {``Quaternion`` or ``number``} -- The quaternion or
+              scalar to multiply by.
+
+        Returns:
+            * {``Quaternion``} -- The product of the multiplication.
 
         """
         if isinstance(other, (float, int)):
@@ -86,7 +127,18 @@ class Quaternion:
         )
 
     def __rmul__(self, other):
-        # This is commutable so we can reverse argument order
+        """
+        Multiply a scalar factor by a quaternion. Quaternion-scalar
+        multiplication is commutative, so this reverses the argument order
+        and delegates to :meth:`__mul__`.
+
+        Args:
+            * other {``number``} -- The scalar to multiply by.
+
+        Returns:
+            * {``Quaternion``} -- The product of the multiplication.
+
+        """
         if isinstance(other, (float, int)):
             return Quaternion.__mul__(self, other)
 
@@ -95,6 +147,13 @@ class Quaternion:
         )
 
     def __abs__(self):
+        """
+        Compute the modulus (magnitude) of the quaternion.
+
+        Returns:
+            * {``float``} -- The modulus of the quaternion.
+
+        """
         return np.sqrt(self.w**2 + self.x**2 + self.y**2 + self.z**2)
 
     def conjugate(self):
@@ -108,16 +167,38 @@ class Quaternion:
         return Quaternion(self.w, -self.x, -self.y, -self.z)
 
     def __len__(self):
-        """All quaternions are of length 4."""
+        """
+        All quaternions are of length 4.
+
+        Returns:
+            * {``int``} -- Always 4.
+
+        """
         return 4
 
     def __neg__(self):
-        """Generate the negative of a quaternion."""
+        """
+        Generate the negative of a quaternion.
+
+        Returns:
+            * {``Quaternion``} -- The negated quaternion.
+
+        """
         return Quaternion(-self.w, -self.x, -self.y, -self.z)
 
     def to_euler_angles(self, *, tol=10e-6):
         """
-        Convert a quaternion to Euler angles.
+        Convert a unit quaternion to Euler angles (roll, pitch, yaw), using
+        the aerospace z-y'-x'' (yaw-pitch-roll) convention.
+
+        Args:
+            * tol {``number``} -- The tolerance allowed between the
+              quaternion's modulus and 1 for it to be considered a valid
+              unit quaternion. Defaults to ``10e-6``.
+
+        Returns:
+            * {``tuple``} -- The ``(phi, m, n)`` Euler angles in radians,
+              representing roll, pitch and yaw respectively.
 
         """
         if abs(abs(self) - 1) > tol:
@@ -142,7 +223,14 @@ class Quaternion:
     @classmethod
     def from_eul_angles(cls, phi, m, n):
         """
-        Generate a rotation quaternion from a set of euler angles.
+        Generate a rotation quaternion from a set of Euler angles (roll,
+        pitch, yaw), using the aerospace z-y'-x'' (yaw-pitch-roll)
+        convention. This is the inverse of :meth:`to_euler_angles`.
+
+        Args:
+            * phi {``number``} -- The roll angle in radians.
+            * m {``number``} -- The pitch angle in radians.
+            * n {``number``} -- The yaw angle in radians.
 
         Returns:
             * {``Quaternion``} -- The rotation quaternion
