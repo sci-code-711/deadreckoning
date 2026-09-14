@@ -7,11 +7,16 @@ A set of tools to reconstruct trajectorys from Inertial Motion Unit measurements
 - `EKF.py` - A refined deadreckoning implimentation that uses prior gravity vector measurments to correct the attitude estimation via Extended Kalman Filtering (EKF)
 - `EKF_fut.py` - An EKF implimentaion that uses prior and future gavity measurements to correct the attitude.
 
-## Required Packages:
-- Pandas
-- Numpy
-- matplotlib
-- pytest
+## Setup:
+
+Dependencies are managed with [uv](https://docs.astral.sh/uv/) and declared
+in `pyproject.toml`.
+
+```bash
+uv sync            # install dependencies into .venv
+uv run ruff check . # lint
+uv run pytest       # run tests
+```
 
 ## Details:
 
