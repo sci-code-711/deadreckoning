@@ -17,9 +17,7 @@ with open("Temp_calib_data.csv") as file:
     data = pd.read_csv(file, delimiter=",", skiprows=0)  # opens data file as an array
 
 num_rows = data.shape[0]
-P = pd.DataFrame(
-    index=range(num_rows), columns=range(20)
-)  # generates expanded data frame
+P = pd.DataFrame(index=range(num_rows), columns=range(20))  # generates expanded data frame
 P.iloc[0, 7:20] = 0  # sets initial values for displacements and velocities to 0
 P.columns = [
     "t",
@@ -43,9 +41,7 @@ P.columns = [
     "qy",
     "qz",
 ]  # adds indexes to data frame
-P.update(
-    data
-)  # Inserts IMU data into  expanded Data frame using indices as references
+P.update(data)  # Inserts IMU data into  expanded Data frame using indices as references
 
 
 #######################################################################################################################
@@ -119,8 +115,8 @@ P.loc[0, "ay"] = A.y
 P.loc[0, "az"] = A.z - grav_accel  # removes gravitational acceleration from readings
 
 # converts initial rotation quaternion into euler angles and inputs them into data frame
-[l, m, n] = qc.to_euler_angles()
-P.loc[0, "L"] = round(l, 3)
+[phi, m, n] = qc.to_euler_angles()
+P.loc[0, "L"] = round(phi, 3)
 P.loc[0, "M"] = round(m, 3)
 P.loc[0, "N"] = round(n, 3)
 
@@ -157,8 +153,7 @@ for r in range(1, num_rows):
 
     dev_bod = (
         np.absolute(
-            ((P.loc[r, "ax"]) ** 2 + (P.loc[r, "ay"]) ** 2 + (P.loc[r, "az"]) ** 2)
-            - grav_accel**2
+            ((P.loc[r, "ax"]) ** 2 + (P.loc[r, "ay"]) ** 2 + (P.loc[r, "az"]) ** 2) - grav_accel**2
         )
     ) ** 0.5
     dev_nav = np.linalg.norm(Av)
@@ -232,8 +227,8 @@ for r in range(1, num_rows):
     P.loc[r, "qz"] = round(qc.z, 10)
 
     # converts rotation quaternion into euler angles
-    [l, m, n] = qc.to_euler_angles()
-    P.loc[r, "L"] = round(l, 6)
+    [phi, m, n] = qc.to_euler_angles()
+    P.loc[r, "L"] = round(phi, 6)
     P.loc[r, "M"] = round(m, 6)
     P.loc[r, "N"] = round(n, 6)
 
@@ -245,15 +240,9 @@ for r in range(1, num_rows):
     P.loc[r, "ay"] = A.y  # -0.00473466*P.loc[r-1,"vl"]
 
     # integrates navigation frame accelerations to find linear velocities
-    P.loc[r, "VX"] = P.loc[r - 1, "VX"] + (
-        (P.loc[r - 1, "ax"] + P.loc[r, "ax"]) * dt / 2
-    )
-    P.loc[r, "VY"] = P.loc[r - 1, "VY"] + (
-        (P.loc[r - 1, "ay"] + P.loc[r, "ay"]) * dt / 2
-    )
-    P.loc[r, "VZ"] = P.loc[r - 1, "VZ"] + (
-        (P.loc[r - 1, "az"] + P.loc[r, "az"]) * dt / 2
-    )
+    P.loc[r, "VX"] = P.loc[r - 1, "VX"] + ((P.loc[r - 1, "ax"] + P.loc[r, "ax"]) * dt / 2)
+    P.loc[r, "VY"] = P.loc[r - 1, "VY"] + ((P.loc[r - 1, "ay"] + P.loc[r, "ay"]) * dt / 2)
+    P.loc[r, "VZ"] = P.loc[r - 1, "VZ"] + ((P.loc[r - 1, "az"] + P.loc[r, "az"]) * dt / 2)
 
     # integrates linear velocities to find linear displacements
     P.loc[r, "X"] = (

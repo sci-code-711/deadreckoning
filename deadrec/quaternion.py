@@ -2,6 +2,7 @@
 A module to handle all things Quaternion related.
 
 """
+
 import numpy as np
 import math
 
@@ -39,30 +40,17 @@ class Quaternion:
         isn't a quaternion it will return false.
 
         """
-        if type(other) != Quaternion:
+        if not isinstance(other, Quaternion):
             return False
 
-        return (
-            self.w == other.w
-            and self.x == other.x
-            and self.y == other.y
-            and self.z == other.z
-        )
+        return self.w == other.w and self.x == other.x and self.y == other.y and self.z == other.z
 
     def __add__(self, other):
         """Add two quaternions together."""
-        if type(other) != Quaternion:
-            raise TypeError(
-                f"Addition is not defined for types Quaternion and "
-                f"{type(other)}"
-            )
+        if not isinstance(other, Quaternion):
+            raise TypeError(f"Addition is not defined for types Quaternion and {type(other)}")
 
-        return Quaternion(
-            self.w + other.w,
-            self.x + other.x,
-            self.y + other.y,
-            self.z + other.z
-        )
+        return Quaternion(self.w + other.w, self.x + other.x, self.y + other.y, self.z + other.z)
 
     __radd__ = __add__
 
@@ -72,10 +60,7 @@ class Quaternion:
 
     def __rsub__(self, other):
         """This is just to customise our Error message"""
-        raise TypeError(
-            f"Subtraction is not defined for types Quaternion and "
-            f"{type(other)}"
-        )
+        raise TypeError(f"Subtraction is not defined for types Quaternion and {type(other)}")
 
     def __iadd__(self, other):
         return Quaternion.__add__(self, other)
@@ -85,44 +70,28 @@ class Quaternion:
         Multiply a quaternion by another quaternion or a scalar factor.
 
         """
-        if type(other) == float or type(other) == int:
-            return Quaternion(
-                self.w * other, self.x * other, self.y * other, self.z * other
-            )
+        if isinstance(other, (float, int)):
+            return Quaternion(self.w * other, self.x * other, self.y * other, self.z * other)
 
-        if type(other) == Quaternion:
+        if isinstance(other, Quaternion):
             return Quaternion(
-                self.w * other.w
-                - self.x * other.x
-                - self.y * other.y
-                - self.z * other.z,
-                self.w * other.x
-                + self.x * other.w
-                + self.y * other.z
-                - self.z * other.y,
-                self.w * other.y
-                - self.x * other.z
-                + self.y * other.w
-                + self.z * other.x,
-                self.w * other.z
-                + self.x * other.y
-                - self.y * other.x
-                + self.z * other.w,
+                self.w * other.w - self.x * other.x - self.y * other.y - self.z * other.z,
+                self.w * other.x + self.x * other.w + self.y * other.z - self.z * other.y,
+                self.w * other.y - self.x * other.z + self.y * other.w + self.z * other.x,
+                self.w * other.z + self.x * other.y - self.y * other.x + self.z * other.w,
             )
 
         raise TypeError(
-            f"Multiplication is not supported between types Quaternion and "
-            f"{type(other)}"
+            f"Multiplication is not supported between types Quaternion and {type(other)}"
         )
 
     def __rmul__(self, other):
         # This is commutable so we can reverse argument order
-        if type(other) == float or type(other) == int:
+        if isinstance(other, (float, int)):
             return Quaternion.__mul__(self, other)
 
         raise TypeError(
-            f"Multiplication is not supported between types Quaternion and "
-            f"{type(other)}"
+            f"Multiplication is not supported between types Quaternion and {type(other)}"
         )
 
     def __abs__(self):
@@ -157,7 +126,7 @@ class Quaternion:
                 f"euler angles. modulus must be 1 +/- {tol}"
             )
 
-        l = math.atan2(
+        phi = math.atan2(
             2 * (self.w * self.x + self.y * self.z),
             (1 - 2 * (self.x**2 + self.y**2)),
         )
@@ -168,10 +137,10 @@ class Quaternion:
             (1 - 2 * (self.y**2 + self.z**2)),
         )
 
-        return (l, m, n)
+        return (phi, m, n)
 
     @classmethod
-    def from_eul_angles(cls, l, m, n):
+    def from_eul_angles(cls, phi, m, n):
         """
         Generate a rotation quaternion from a set of euler angles.
 
@@ -179,14 +148,14 @@ class Quaternion:
             * {``Quaternion``} -- The rotation quaternion
 
         """
-        norm = np.linalg.norm([l, m, n])
+        norm = np.linalg.norm([phi, m, n])
 
         if norm == 0:
             return Quaternion(1, 0, 0, 0)
 
         return cls(
             np.cos(norm),
-            l / norm * np.sin(norm),
+            phi / norm * np.sin(norm),
             m / norm * np.sin(norm),
             n / norm * np.sin(norm),
         )

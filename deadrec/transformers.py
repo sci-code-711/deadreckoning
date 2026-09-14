@@ -2,6 +2,7 @@ from .runners import Runner, TerminateSignal
 from multiprocessing import Queue
 from abc import ABC, abstractmethod
 
+
 class TransformerBase(Runner, ABC):
     def __init__(self, i_stream: Queue, o_stream: Queue):
         self.i_stream = i_stream
@@ -12,7 +13,7 @@ class TransformerBase(Runner, ABC):
         count = 0
         while True:
             item = self.i_stream.get()
-            if type(item) == TerminateSignal:
+            if isinstance(item, TerminateSignal):
                 self.o_stream.put(item)
                 break
 

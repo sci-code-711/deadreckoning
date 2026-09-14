@@ -15,14 +15,10 @@ import Functions as func
 
 data = []
 with open("Temp_calib_data.csv") as csvfile:
-    data = pd.read_csv(
-        csvfile, delimiter=",", skiprows=0
-    )  # opens data file as an array
+    data = pd.read_csv(csvfile, delimiter=",", skiprows=0)  # opens data file as an array
 
 numRows = data.shape[0]
-P = pd.DataFrame(
-    index=range(numRows), columns=range(20)
-)  # generates expanded dataframe
+P = pd.DataFrame(index=range(numRows), columns=range(20))  # generates expanded dataframe
 P.iloc[0, 7:20] = 0  # sets initial values for displacments and velocities to 0
 P.columns = [
     "t",
@@ -46,9 +42,7 @@ P.columns = [
     "qy",
     "qz",
 ]  # adds indexes to data frame
-P.update(
-    data
-)  # Inserts IMU data into  expanded Data frame using indicies as referneces
+P.update(data)  # Inserts IMU data into  expanded Data frame using indicies as referneces
 
 #######################################################################################################################
 # this section of the code calculates the initial attitude of the IMU by averaging the acceleration readings during the
@@ -117,13 +111,11 @@ A = qc * a * qcc
 # extracts rotated accelerations and inserts them into data frame
 P.loc[0, "ax"] = round(A.x, 3)
 P.loc[0, "ay"] = round(A.y, 3)
-P.loc[0, "az"] = round(
-    A.z - gsize, 3
-)  # removes gravitiational accceleration from readings
+P.loc[0, "az"] = round(A.z - gsize, 3)  # removes gravitiational accceleration from readings
 
 # converts initial rotation quaternian into euler angles and inputs them into data frame
-[l, m, n] = qc.to_euler_angles()
-P.loc[0, "L"] = round(l, 3)
+[phi, m, n] = qc.to_euler_angles()
+P.loc[0, "L"] = round(phi, 3)
 P.loc[0, "M"] = round(m, 3)
 P.loc[0, "N"] = round(n, 3)
 
@@ -161,17 +153,13 @@ for r in range(1, numRows):
         ) ** 0.5
         acel_pred[fut_r - (r - row), 0] = P.loc[row, "t"]
     for row in range(r, rmax):
-        w1 = np.array(
-            [P.loc[row - 1, "vl"], P.loc[row - 1, "vm"], P.loc[row - 1, "vn"]]
-        )
+        w1 = np.array([P.loc[row - 1, "vl"], P.loc[row - 1, "vm"], P.loc[row - 1, "vn"]])
         w2 = np.array([P.loc[row, "vl"], P.loc[row, "vm"], P.loc[row, "vn"]])
 
         [q_pred, qw] = func.RK4(qi, w1, w2, dt)
         q_predc = np.conjugate(q_pred)
 
-        aq_fut = Quaternion(
-            0, data.loc[row, "ax"], data.loc[row, "ay"], data.loc[row, "az"]
-        )
+        aq_fut = Quaternion(0, data.loc[row, "ax"], data.loc[row, "ay"], data.loc[row, "az"])
 
         A_pred = q_pred * aq_fut * q_predc
         Av_pred = [A_pred.x, A_pred.y, A_pred.z - gsize]
@@ -252,8 +240,8 @@ for r in range(1, numRows):
     P.loc[r, "qz"] = round(qc.z, 3)
 
     # converts roatation quaternian into euler angles to strore in data table
-    [l, m, n] = qc.to_euler_angles()
-    P.loc[r, "L"] = round(l, 6)
+    [phi, m, n] = qc.to_euler_angles()
+    P.loc[r, "L"] = round(phi, 6)
     P.loc[r, "M"] = round(m, 6)
     P.loc[r, "N"] = round(n, 6)
 

@@ -30,9 +30,9 @@ def arg_parser():
         default=2,
         type=int,
         help=(
-            f"The range over which to average eg. '--filt_range=2' corresponds "
-            f"to each filtered measurement being the average of the bin itself "
-            f"and the bins either side within a range of 2."
+            "The range over which to average eg. '--filt_range=2' corresponds "
+            "to each filtered measurement being the average of the bin itself "
+            "and the bins either side within a range of 2."
         ),
     )
 
@@ -57,10 +57,7 @@ def main():
     filt_data = data.copy()
 
     # specifies number of bins either side to average over
-    print(
-        f"Filtering will take a moving average of {2 * args.filt_range + 1} "
-        f"measurements."
-    )
+    print(f"Filtering will take a moving average of {2 * args.filt_range + 1} measurements.")
 
     tot = 0
     for r in range(length):
