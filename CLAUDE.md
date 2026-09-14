@@ -55,5 +55,5 @@ uv run pytest
 - The root-level `.py` scripts and notebooks are legacy/exploratory and
   carry pre-existing lint issues; don't fix unrelated lint findings outside
   the files you're already touching.
-- `environment.yml` is legacy (conda-based); `pyproject.toml` + `uv` is the
-  source of truth for dependencies going forward.
+- `pyproject.toml` + `uv` is the sole source of truth for dependencies;
+  there is no conda `environment.yml` anymore.
