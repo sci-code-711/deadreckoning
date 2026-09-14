@@ -57,9 +57,7 @@ uv run pytest
   `python`/`pytest`/`ruff` directly, so the correct locked environment is
   used.
 - Run `uv run ruff check .`, `uv run ruff format --check .`, and
-  `uv run pytest` before considering a change complete.
-- The root-level `.py` scripts and notebooks are legacy/exploratory and
-  carry pre-existing lint issues; don't fix unrelated lint findings outside
-  the files you're already touching.
+  `uv run pytest` before considering a change complete — all three are
+  enforced in CI and must pass cleanly.
 - `pyproject.toml` + `uv` is the sole source of truth for dependencies;
   there is no conda `environment.yml` anymore.
