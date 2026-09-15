@@ -10,6 +10,9 @@ dependencies = [
     "matplotlib",
 ]
 
+[project.scripts]
+deadrec = "deadrec.cli:main"
+
 [dependency-groups]
 dev = [
     "ruff",
