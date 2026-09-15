@@ -22,10 +22,7 @@ measurements.
     — a multiprocessing streaming-pipeline scaffold, not yet wired up to
     the reconstruction code above.
 - `test/` — pytest test suite.
-- `example_data/` — sample IMU data used by tests and notebooks.
-- `*.ipynb` — exploratory notebooks; not linted or covered by tests. Some
-  predate the `deadrec` package's current API and may reference removed
-  root-level scripts.
+- `example_data/` — sample IMU data used by tests.
 
 ## Tooling
 
