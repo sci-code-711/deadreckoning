@@ -1,10 +1,4 @@
-"""Gravity-vector based attitude estimation.
-
-Ported from the initial-attitude computation duplicated near-identically at
-the top of ``Deadrec.py``, ``EKF.py`` and ``EKF_fut.py``, plus the
-deviation-gating math shared by the two EKF variants.
-
-"""
+"""Gravity-vector based attitude estimation."""
 
 import numpy as np
 
@@ -16,23 +10,18 @@ def attitude_aligning_vectors(source, target=(0, 0, 1)) -> Quaternion:
     Find the attitude quaternion that rotates the direction ``source`` onto
     the direction ``target``.
 
-    This is the single-sample rotation formula duplicated across the
-    initial-attitude estimate and the EKF gravity-correction step in the
-    original scripts.
-
     Args:
         * source {``array-like``} -- The 3-vector to rotate (e.g. a raw
           accelerometer reading). Does not need to be normalised.
         * target {``array-like``} -- The 3-vector to rotate onto. Defaults to
-          ``(0, 0, 1)``, matching the convention used throughout the
-          original scripts (note: this differs from the unused
-          ``Functions.GRAV_VEC = (0, 1, 0)``).
+          ``(0, 0, 1)``.
 
     Returns:
         * {``Quaternion``} -- The rotation quaternion. When ``source`` and
-          ``target`` are parallel or anti-parallel (including when they are
-          exactly opposed) the cross product is zero and the identity
-          quaternion is returned, matching the original scripts' behaviour.
+          ``target`` are parallel or anti-parallel the cross product is zero
+          and the identity quaternion is returned - this includes the case
+          where the vectors point in exactly opposite directions, which is
+          a known limitation of this method.
 
     """
     source = np.asarray(source, dtype=float)
@@ -69,9 +58,8 @@ def initial_attitude_from_gravity(accel_samples, *, gravity_direction=(0, 0, 1))
     outer product of each sample's rotation quaternion with itself, and
     takes the eigenvector of the largest eigenvalue as the average attitude.
 
-    The original scripts always used the first 30 readings of the
-    calibration period; callers should slice ``accel_samples`` themselves to
-    reproduce that (e.g. ``initial_attitude_from_gravity(accel[:30])``).
+    Pass only the stationary readings that should contribute to the
+    estimate, e.g. the first N samples of a calibration period.
 
     Args:
         * accel_samples {``array-like``} -- An (N, 3) array of stationary
@@ -108,13 +96,6 @@ def gravity_deviation(accel_nav) -> float:
     reading, used to gate the EKF gravity-correction step: a large value
     indicates real (non-gravitational) acceleration, during which the
     gravity-vector correction should not be trusted.
-
-    Ported from ``EKF.py``/``EKF_fut.py``. Both scripts also compute a
-    body-frame deviation check (``dev_bod`` in ``EKF.py``) and, in
-    ``EKF_fut.py``, a windowed cumulative deviation (``cum_dev``) - neither
-    value is ever actually used to make the gating decision in either
-    script (in ``EKF.py`` both branches of the comparison assign the same
-    result), so neither was ported.
 
     Args:
         * accel_nav {``array-like``} -- Gravity-removed acceleration in the

@@ -90,8 +90,8 @@ def test_gravity_deviation():
 
 
 def _reference_initial_attitude(accel_samples: np.ndarray) -> Quaternion:
-    """Verbatim port of the initial-attitude loop shared by Deadrec.py,
-    EKF.py and EKF_fut.py, kept only to regression-test against real data."""
+    """Independent reference implementation of the eigenvector-averaging
+    algorithm, kept only to regression-test against real data."""
     g = np.array([0, 0, 1])
     n = len(accel_samples)
     mat = np.zeros((4, 4))
