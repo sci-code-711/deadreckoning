@@ -1,12 +1,4 @@
-"""Pure quaternion kinematics: angular-rate integration primitives.
-
-Ported from the root-level ``Functions.py``. ``Functions.q_update`` was not
-ported - it is never called anywhere in the scripts it was written for, and
-attempting to run it raises ``TypeError`` (it divides a ``Quaternion`` by a
-scalar via ``/``, an operator ``Quaternion`` does not implement), so there is
-no validated behaviour to preserve.
-
-"""
+"""Pure quaternion kinematics: angular-rate integration primitives."""
 
 import numpy as np
 
