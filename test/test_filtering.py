@@ -53,9 +53,8 @@ def test_moving_average_filter_single_column():
 
 
 def test_moving_average_filter_range_at_least_data_length_raises():
-    # Mirrors an existing limitation of Filter.py: the first-row window
-    # reads filt_range + 1 rows unconditionally, so filt_range must be
-    # smaller than the data length.
+    # The first-row window reads filt_range + 1 rows unconditionally, so
+    # filt_range must be smaller than the data length.
     data = np.array([1.0, 2.0, 3.0])
 
     with pytest.raises(IndexError):
