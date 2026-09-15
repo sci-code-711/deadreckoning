@@ -113,9 +113,7 @@ class DeadReckoner:
             prev = self._prev_state
             dt = sample.t - self._prev_sample.t
 
-            self.attitude = rk4_attitude_step(
-                self.attitude, self._prev_sample.gyro, sample.gyro, dt
-            )
+            self.attitude = self._predict_attitude(sample, dt)
             accel_nav = accel_to_nav_frame(
                 sample.accel, self.attitude, self.gravity_magnitude, self.gravity_direction
             )
@@ -136,6 +134,25 @@ class DeadReckoner:
         self._prev_state = state
 
         return state
+
+    def _predict_attitude(self, sample: ImuSample, dt: float) -> Quaternion:
+        """
+        Propagate attitude to ``sample`` using gyroscope readings.
+
+        Subclasses that fuse in other sensors (e.g. a gravity-vector
+        correction) can override this to adjust the RK4 prediction before
+        it's used to rotate acceleration into the navigation frame.
+
+        Args:
+            * sample {``ImuSample``} -- The IMU reading being processed.
+              ``self._prev_sample`` is the previous one.
+            * dt {``float``} -- Time step since ``self._prev_sample`` (s).
+
+        Returns:
+            * {``Quaternion``} -- The predicted attitude at ``sample.t``.
+
+        """
+        return rk4_attitude_step(self.attitude, self._prev_sample.gyro, sample.gyro, dt)
 
     def run(self, samples) -> list[TrajectoryState]:
         """
