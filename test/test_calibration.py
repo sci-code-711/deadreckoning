@@ -8,8 +8,8 @@ from deadrec.calibration import (
 )
 from deadrec.samples import ImuSample
 
-# The hardcoded coefficient arrays from the root-level Calibration.py,
-# reused here so the regression test exercises the same real numbers.
+# Real calibration coefficients for one physical IMU, reused here so the
+# regression test exercises real numbers rather than arbitrary ones.
 _A_COEFF = np.array(
     [
         6.08032845e-03,
@@ -116,8 +116,8 @@ def test_estimate_gyro_bias_negates_stationary_mean():
 
 
 def _reference_calibrate(accel, gyro, gyro_bias):
-    """Verbatim port of the per-row transform in Calibration.py, kept only
-    to regression-test against the real hardcoded coefficients."""
+    """Independent reference implementation of the misalignment/scale/bias
+    transform, kept only to regression-test against real coefficients."""
     c_a = _A_COEFF[6:]
     Ta = np.array([[1, -_A_COEFF[0], _A_COEFF[1]], [0, 1, -_A_COEFF[2]], [0, 0, 1]])
     Ka = np.array([[_A_COEFF[3], 0, 0], [0, _A_COEFF[4], 0], [0, 0, _A_COEFF[5]]])

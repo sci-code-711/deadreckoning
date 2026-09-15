@@ -1,9 +1,6 @@
 """IMU calibration: misalignment/scale/bias correction for raw accelerometer
 and gyroscope readings.
 
-Ported from the root-level ``Calibration.py``. See ``CalibrationCoefficients``
-for the one deliberate behavioural change from the original script.
-
 """
 
 from dataclasses import dataclass
@@ -42,16 +39,15 @@ class CalibrationCoefficients:
     @classmethod
     def from_raw_coefficients(cls, accel_coeffs, gyro_coeffs, gyro_bias):
         """
-        Build calibration coefficients from the flat 9-element coefficient
-        arrays used in ``Calibration.py`` (``a_coeff``/``g_coeff``).
+        Build calibration coefficients from flat 9-element coefficient
+        arrays: 3 misalignment terms, 3 scale factors, then 3 bias terms.
 
         Args:
             * accel_coeffs {``array-like``} -- 9 accelerometer coefficients:
               3 misalignment terms, 3 scale factors, 3 bias terms.
-            * gyro_coeffs {``array-like``} -- 9 gyroscope coefficients: 3
-              misalignment terms (matching a non-triangular layout, unlike
-              the accelerometer's), 3 more misalignment terms, then 3 scale
-              factors.
+            * gyro_coeffs {``array-like``} -- 9 gyroscope coefficients: 6
+              misalignment terms (a non-triangular layout, unlike the
+              accelerometer's 3), then 3 scale factors.
             * gyro_bias {``array-like``} -- (3,) gyroscope bias, from
               :func:`estimate_gyro_bias`. Unlike the other coefficients this
               is not a fixed sensor property - it's measured per-session
