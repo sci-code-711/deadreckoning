@@ -3,9 +3,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from deadrec.attitude import estimate_gravity_magnitude, initial_attitude_from_gravity
+from deadrec.attitude import (
+    attitude_aligning_vectors,
+    estimate_gravity_magnitude,
+    initial_attitude_from_gravity,
+)
 from deadrec.dead_reckoning import DeadReckoner
-from deadrec.ekf import GravityCorrectedEKF, _blend_attitudes, _heading_only
+from deadrec.ekf import (
+    GravityCorrectedEKF,
+    WindowedGravityCorrectedEKF,
+    _blend_attitudes,
+    _heading_only,
+)
 from deadrec.quaternion import Quaternion
 from deadrec.samples import ImuSample
 
@@ -268,3 +277,253 @@ def test_gravity_corrected_ekf_y_position_diverges_from_original_buggy_script():
 
     final_y = states[-1].position[1]
     assert abs(final_y - buggy_position[-1, 1]) > 1e-3
+
+
+# --- WindowedGravityCorrectedEKF ---
+
+
+def test_windowed_ekf_step_is_disabled():
+    ekf = WindowedGravityCorrectedEKF(Quaternion(1, 0, 0, 0), gravity_magnitude=9.8)
+
+    with pytest.raises(NotImplementedError):
+        ekf.step(ImuSample(t=0.0, accel=[0.0, 0.0, 9.8], gyro=[0.0, 0.0, 0.0]))
+
+
+def test_windowed_ekf_window_bounds_near_start_clips_to_zero():
+    ekf = WindowedGravityCorrectedEKF(
+        Quaternion(1, 0, 0, 0), gravity_magnitude=9.8, window_radius=5
+    )
+
+    assert ekf._window_bounds(2, n=100) == (0, 8)
+
+
+def test_windowed_ekf_window_bounds_near_end_clips_to_n():
+    ekf = WindowedGravityCorrectedEKF(
+        Quaternion(1, 0, 0, 0), gravity_magnitude=9.8, window_radius=5
+    )
+
+    assert ekf._window_bounds(97, n=100) == (92, 100)
+
+
+def test_windowed_ekf_window_bounds_in_middle_is_symmetric():
+    ekf = WindowedGravityCorrectedEKF(
+        Quaternion(1, 0, 0, 0), gravity_magnitude=9.8, window_radius=5
+    )
+
+    assert ekf._window_bounds(50, n=100) == (45, 56)
+
+
+def test_windowed_ekf_run_empty_returns_empty():
+    ekf = WindowedGravityCorrectedEKF(Quaternion(1, 0, 0, 0), gravity_magnitude=9.8)
+
+    assert ekf.run([]) == []
+
+
+def test_windowed_ekf_run_single_sample_seeds_only():
+    ekf = WindowedGravityCorrectedEKF(Quaternion(1, 0, 0, 0), gravity_magnitude=9.8)
+    sample = ImuSample(t=0.0, accel=[0.0, 0.0, 9.8], gyro=[0.0, 0.0, 0.0])
+
+    states = ekf.run([sample])
+
+    assert len(states) == 1
+    assert np.allclose(states[0].velocity, [0.0, 0.0, 0.0])
+    assert np.allclose(states[0].position, [0.0, 0.0, 0.0])
+
+
+def _reference_windowed_ekf(
+    t,
+    accel,
+    gyro,
+    *,
+    attitude_n,
+    gravity_n,
+    fix_y_axis_bug,
+    fix_edge_weight_bug,
+    window_radius=5,
+    deviation_threshold=0.035,
+    beta=0.2,
+):
+    """Reference port of EKF_fut.py's per-row loop, reusing the independent
+    _rk4/_alignment/_heading_only_ref/_initial_attitude helpers above (not
+    calling into deadrec.kinematics/deadrec.attitude/deadrec.ekf), with the
+    same Y-axis bug and edge-window-weighting bug optionally reproduced.
+
+    EKF_fut.py always divides its windowed gravity estimate by the full
+    2 * window_radius + 1, even when the window is clipped near either end
+    of the sample sequence and has fewer actual terms - so a clipped
+    window's estimate carries proportionally less weight than an interior
+    one instead of being renormalised. fix_edge_weight_bug=True divides by
+    the actual window length instead."""
+    g = np.array([0, 0, 1])
+    n = len(t)
+
+    gravity_magnitude = np.mean(np.linalg.norm(accel[:gravity_n], axis=1))
+    qc = _initial_attitude(accel[:attitude_n], g)
+
+    def to_nav(a, q):
+        aq = Quaternion(0, *a)
+        rotated = q * aq * q.conjugate()
+        return np.array([rotated.x, rotated.y, rotated.z]) - gravity_magnitude * g
+
+    attitudes = [qc]
+    accel_nav = np.zeros((n, 3))
+    velocity = np.zeros((n, 3))
+    position = np.zeros((n, 3))
+    accel_nav[0] = to_nav(accel[0], qc)
+
+    fixed_window_size = 2 * window_radius + 1
+
+    for r in range(1, n):
+        qi = qc
+        dt = t[r] - t[r - 1]
+
+        if r < window_radius:
+            rmin, rmax = 0, r + window_radius + 1
+        elif r > n - (window_radius + 1):
+            rmin, rmax = r - window_radius, n
+        else:
+            rmin, rmax = r - window_radius, r + window_radius + 1
+        rmax = min(rmax, n)
+
+        deviations = [np.linalg.norm(accel_nav[row]) for row in range(rmin, r)]
+
+        av_pred_at_r = None
+        for row in range(r, rmax):
+            q_pred = _rk4(qi, gyro[row - 1], gyro[row], dt)
+            av_pred = to_nav(accel[row], q_pred)
+            if row == r:
+                av_pred_at_r = av_pred
+                qc = q_pred
+            deviations.append(np.linalg.norm(av_pred))
+
+        if max(deviations) < deviation_threshold:
+            qhead = _heading_only_ref(qc)
+            divisor = (rmax - rmin) if fix_edge_weight_bug else fixed_window_size
+            gmat = np.zeros((4, 4))
+            for row in range(rmin, rmax):
+                qg = qhead * _alignment(accel[row], g)
+                qgv = np.array([qg.w, qg.x, qg.y, qg.z])
+                gmat = gmat + np.outer(qgv, qgv) / divisor
+
+            qcv = np.array([qc.w, qc.x, qc.y, qc.z])
+            mat = np.outer(qcv, qcv) * (1 - beta) + gmat * beta
+            eig_val, eig_vec = np.linalg.eig(mat)
+            q = eig_vec[:, np.argmax(eig_val)].real
+            qc = Quaternion(*(q / np.linalg.norm(q)))
+            av = to_nav(accel[r], qc)
+        else:
+            av = av_pred_at_r
+
+        attitudes.append(qc)
+        accel_nav[r] = av
+
+        velocity[r] = velocity[r - 1] + (accel_nav[r - 1] + accel_nav[r]) * dt / 2
+
+        x_terms = (accel_nav[r - 1, 0], accel_nav[r, 0])
+        y_terms = (accel_nav[r - 1, 1], accel_nav[r, 1]) if fix_y_axis_bug else x_terms
+        z_terms = (accel_nav[r - 1, 2], accel_nav[r, 2])
+
+        position[r, 0] = position[r - 1, 0] + velocity[r - 1, 0] * dt + sum(x_terms) * dt**2 / 4
+        position[r, 1] = position[r - 1, 1] + velocity[r - 1, 1] * dt + sum(y_terms) * dt**2 / 4
+        position[r, 2] = position[r - 1, 2] + velocity[r - 1, 2] * dt + sum(z_terms) * dt**2 / 4
+
+    return attitudes, accel_nav, velocity, position
+
+
+def _run_windowed_ekf(t, accel, gyro, attitude_n, gravity_n):
+    initial_attitude = initial_attitude_from_gravity(accel[:attitude_n])
+    gravity_magnitude = estimate_gravity_magnitude(accel[:gravity_n])
+    ekf = WindowedGravityCorrectedEKF(initial_attitude, gravity_magnitude)
+    samples = [ImuSample(t=t[i], accel=accel[i], gyro=gyro[i]) for i in range(len(t))]
+    return ekf.run(samples)
+
+
+def test_windowed_ekf_matches_corrected_reference_on_example_data():
+    t, accel, gyro = _load_example_data()
+    attitude_n, gravity_n = 30, 300  # matches EKF_fut.py's parameters
+
+    states = _run_windowed_ekf(t, accel, gyro, attitude_n, gravity_n)
+    ref_attitudes, ref_accel_nav, ref_velocity, ref_position = _reference_windowed_ekf(
+        t,
+        accel,
+        gyro,
+        attitude_n=attitude_n,
+        gravity_n=gravity_n,
+        fix_y_axis_bug=True,
+        fix_edge_weight_bug=True,
+    )
+
+    for i, state in enumerate(states):
+        assert _approx_equal(state.attitude, ref_attitudes[i], tol=1e-6)
+        assert np.allclose(state.accel_nav, ref_accel_nav[i], atol=1e-6)
+        assert np.allclose(state.velocity, ref_velocity[i], atol=1e-6)
+        assert np.allclose(state.position, ref_position[i], atol=1e-6)
+
+
+def test_windowed_ekf_y_position_diverges_from_original_buggy_script():
+    t, accel, gyro = _load_example_data()
+    attitude_n, gravity_n = 30, 300
+
+    states = _run_windowed_ekf(t, accel, gyro, attitude_n, gravity_n)
+    _, _, _, buggy_position = _reference_windowed_ekf(
+        t,
+        accel,
+        gyro,
+        attitude_n=attitude_n,
+        gravity_n=gravity_n,
+        fix_y_axis_bug=False,
+        fix_edge_weight_bug=False,
+    )
+
+    final_y = states[-1].position[1]
+    assert abs(final_y - buggy_position[-1, 1]) > 1e-3
+
+
+def test_windowed_ekf_normalises_gravity_estimate_for_clipped_windows():
+    # example_data/Example_data.csv doesn't happen to exercise a clipped
+    # window where the correction actually engages, so this uses a short
+    # synthetic, low-noise, zero-gyro sequence where it reliably does:
+    # with no rotation, the RK4-predicted attitude never changes, so the
+    # deviation gate stays open and every step gets corrected.
+    rng = np.random.default_rng(0)
+    n = 7
+    window_radius = 2
+    t = np.arange(n, dtype=float) * 0.1
+    accel = np.tile([0.0, 0.0, 9.8], (n, 1))
+    accel[:, 0] += rng.normal(scale=0.3, size=n)
+    gyro = np.zeros((n, 3))
+    samples = [ImuSample(t=t[i], accel=accel[i], gyro=gyro[i]) for i in range(n)]
+
+    initial_attitude = Quaternion(1, 0, 0, 0)
+    gravity_magnitude = 9.8
+
+    ekf = WindowedGravityCorrectedEKF(
+        initial_attitude,
+        gravity_magnitude,
+        deviation_threshold=5.0,
+        window_radius=window_radius,
+    )
+    states = ekf.run(samples)
+
+    # Recompute the r=1 correction (window [0, 4) - clipped, since
+    # window_radius=2 would otherwise reach back to index -1) using the
+    # pre-fix normalisation, which always divided by the full
+    # 2 * window_radius + 1 regardless of how many terms were actually
+    # summed.
+    r = 1
+    rmin, rmax = 0, r + window_radius + 1
+    heading = _heading_only(initial_attitude)  # zero gyro => prediction == initial_attitude
+    fixed_divisor = 2 * window_radius + 1
+    old_gravity_mat = np.zeros((4, 4))
+    for row in range(rmin, rmax):
+        qg = heading * attitude_aligning_vectors(accel[row], (0, 0, 1))
+        qgv = np.array([qg.w, qg.x, qg.y, qg.z])
+        old_gravity_mat = old_gravity_mat + np.outer(qgv, qgv) / fixed_divisor
+
+    predicted_v = np.array([heading.w, heading.x, heading.y, heading.z])
+    old_mat = np.outer(predicted_v, predicted_v) * (1 - ekf.beta) + old_gravity_mat * ekf.beta
+    eig_val, eig_vec = np.linalg.eig(old_mat)
+    q = eig_vec[:, np.argmax(eig_val)].real
+    old_attitude = Quaternion(*(q / np.linalg.norm(q)))
+
+    assert not _approx_equal(states[r].attitude, old_attitude, tol=1e-9)
