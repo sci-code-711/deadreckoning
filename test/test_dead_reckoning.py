@@ -36,6 +36,54 @@ def test_dead_reckoner_first_step_seeds_zero_velocity_and_position():
     assert np.allclose(state.position, [0.0, 0.0, 0.0])
 
 
+def test_dead_reckoner_first_step_seeds_given_velocity_and_position():
+    reckoner = DeadReckoner(
+        Quaternion(1, 0, 0, 0),
+        gravity_magnitude=9.8,
+        initial_velocity=[1.0, -2.0, 0.5],
+        initial_position=[10.0, 20.0, 30.0],
+    )
+    sample = ImuSample(t=0.0, accel=[0.0, 0.0, 9.8], gyro=[0.0, 0.0, 0.0])
+
+    state = reckoner.step(sample)
+
+    assert np.allclose(state.velocity, [1.0, -2.0, 0.5])
+    assert np.allclose(state.position, [10.0, 20.0, 30.0])
+
+
+def test_dead_reckoner_can_resume_from_a_previous_run_final_state():
+    samples = [
+        ImuSample(t=0.0, accel=[0.0, 0.0, 9.8], gyro=[0.0, 0.0, 0.0]),
+        ImuSample(t=0.1, accel=[0.2, 0.0, 9.8], gyro=[5.0, 0.0, 0.0]),
+        ImuSample(t=0.2, accel=[0.0, 0.3, 9.8], gyro=[0.0, 5.0, 0.0]),
+        ImuSample(t=0.3, accel=[0.1, 0.1, 9.8], gyro=[0.0, 0.0, 5.0]),
+    ]
+
+    continuous_states = DeadReckoner(Quaternion(1, 0, 0, 0), gravity_magnitude=9.8).run(samples)
+
+    # Run the first two samples, then hand off to a fresh DeadReckoner
+    # seeded from that run's final attitude/velocity/position, rather than
+    # from a zeroed-out "known good state".
+    first_reckoner = DeadReckoner(Quaternion(1, 0, 0, 0), gravity_magnitude=9.8)
+    handoff = first_reckoner.run(samples[:2])[-1]
+
+    resumed_reckoner = DeadReckoner(
+        handoff.attitude,
+        gravity_magnitude=9.8,
+        initial_velocity=handoff.velocity,
+        initial_position=handoff.position,
+    )
+    # A DeadReckoner's own first step always re-seeds rather than
+    # propagating, so replay the sample the handoff state came from before
+    # continuing with genuinely new samples.
+    resumed_reckoner.step(samples[1])
+    resumed_states = resumed_reckoner.run(samples[2:])
+
+    for expected, actual in zip(continuous_states[2:], resumed_states):
+        assert np.allclose(actual.position, expected.position)
+        assert np.allclose(actual.velocity, expected.velocity)
+
+
 def test_dead_reckoner_integrates_constant_acceleration():
     reckoner = DeadReckoner(Quaternion(1, 0, 0, 0), gravity_magnitude=0.0)
     reckoner.step(ImuSample(t=0.0, accel=[1.0, 0.0, 0.0], gyro=[0.0, 0.0, 0.0]))

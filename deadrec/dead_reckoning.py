@@ -52,6 +52,13 @@ class DeadReckoner:
         * gravity_direction {``array-like``} -- Unit vector giving the
           direction of gravity in the navigation frame. Defaults to
           ``(0, 0, 1)``.
+        * initial_velocity {``array-like``} -- Velocity at the first sample.
+          Defaults to ``(0, 0, 0)`` - only correct if the system is known to
+          be at rest there; pass the real velocity when resuming a
+          trajectory (e.g. from a previous run's final state) instead.
+        * initial_position {``array-like``} -- Position at the first sample.
+          Defaults to ``(0, 0, 0)``, i.e. treating the first sample as the
+          origin; pass the real position when it's known.
 
     """
 
@@ -61,10 +68,14 @@ class DeadReckoner:
         gravity_magnitude: float,
         *,
         gravity_direction=(0, 0, 1),
+        initial_velocity=(0.0, 0.0, 0.0),
+        initial_position=(0.0, 0.0, 0.0),
     ):
         self.attitude = initial_attitude
         self.gravity_magnitude = gravity_magnitude
         self.gravity_direction = gravity_direction
+        self.initial_velocity = np.asarray(initial_velocity, dtype=float)
+        self.initial_position = np.asarray(initial_position, dtype=float)
         self._prev_sample: ImuSample | None = None
         self._prev_state: TrajectoryState | None = None
 
@@ -72,11 +83,12 @@ class DeadReckoner:
         """
         Process one IMU sample and advance the reconstructed trajectory.
 
-        The first call seeds the trajectory at zero velocity and
-        position, using ``initial_attitude`` rather than propagating it
-        (there is no previous sample to integrate gyroscope readings
-        against). Every subsequent call propagates attitude with RK4 and
-        integrates velocity/position with the trapezoidal rule.
+        The first call seeds the trajectory at ``initial_velocity``/
+        ``initial_position`` (zero by default) using ``initial_attitude``
+        rather than propagating it - there is no previous sample to
+        integrate gyroscope readings against. Every subsequent call
+        propagates attitude with RK4 and integrates velocity/position with
+        the trapezoidal rule.
 
         Args:
             * sample {``ImuSample``} -- The IMU reading to process.
@@ -93,8 +105,8 @@ class DeadReckoner:
                 t=sample.t,
                 attitude=self.attitude,
                 accel_nav=accel_nav,
-                velocity=np.zeros(3),
-                position=np.zeros(3),
+                velocity=self.initial_velocity,
+                position=self.initial_position,
                 euler=self.attitude.to_euler_angles(),
             )
         else:
