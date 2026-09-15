@@ -9,14 +9,20 @@ IMU (gyroscope + accelerometer) measurements, using direct integration and
 Extended Kalman Filtering (EKF) with attitude correction from gravity vector
 measurements.
 
-- `deadrec/` — the installable package (quaternion math, connectors,
-  transformers, runners, core pipeline).
+- `deadrec/` — the installable package:
+  - `quaternion.py`, `kinematics.py`, `attitude.py` — attitude math and
+    gravity-vector estimation.
+  - `calibration.py`, `filtering.py` — sensor calibration and low-pass
+    filtering.
+  - `samples.py` — shared `ImuSample`/`TrajectoryState` data types.
+  - `dead_reckoning.py`, `ekf.py` — trajectory reconstruction
+    (`DeadReckoner`, `GravityCorrectedEKF`, `WindowedGravityCorrectedEKF`).
+  - `io.py`, `cli.py` — CSV read/write and the `deadrec` command-line tool.
+  - `core.py`, `connectors.py`, `transformers.py`, `runners.py`, `logger.py`
+    — a multiprocessing streaming-pipeline scaffold, not yet wired up to
+    the reconstruction code above.
 - `test/` — pytest test suite.
-- `Deadrec.py`, `EKF.py`, `EKF_fut.py`, `Calibration.py`, `Filter.py`,
-  `Functions.py` — standalone scripts/prototypes at the repo root (not part
-  of the `deadrec` package).
-- `example_data/` — sample IMU data used by the scripts/notebooks.
-- `*.ipynb` — exploratory notebooks; not linted or covered by tests.
+- `example_data/` — sample IMU data used by tests.
 
 ## Tooling
 

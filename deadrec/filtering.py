@@ -1,8 +1,4 @@
-"""Low-pass filtering of IMU readings by moving average.
-
-Ported from the root-level ``Filter.py``.
-
-"""
+"""Low-pass filtering of IMU readings by moving average."""
 
 import numpy as np
 
@@ -15,10 +11,8 @@ def moving_average_filter(data, filt_range: int) -> np.ndarray:
     exist (not zero-padded), so it shrinks rather than including
     out-of-bounds data.
 
-    ``data`` should contain only the columns to be filtered - the original
-    ``Filter.py`` always excluded its time column before filtering, and
-    callers here should do the same (e.g. filter accelerometer/gyroscope
-    columns only, and leave timestamps untouched).
+    ``data`` should contain only the columns to be filtered - e.g. pass
+    accelerometer/gyroscope columns only, and leave a timestamp column out.
 
     Args:
         * data {``array-like``} -- An (N, ...) array of readings to filter,
