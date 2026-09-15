@@ -90,6 +90,24 @@ def initial_attitude_from_gravity(accel_samples, *, gravity_direction=(0, 0, 1))
     return Quaternion(*q)
 
 
+def estimate_gravity_magnitude(stationary_accel_samples) -> float:
+    """
+    Estimate the magnitude of gravitational acceleration from a period
+    where the sensor was known to be stationary, as the mean magnitude of
+    its accelerometer readings.
+
+    Args:
+        * stationary_accel_samples {``array-like``} -- An (N, 3) array of
+          stationary accelerometer readings.
+
+    Returns:
+        * {``float``} -- The estimated gravity magnitude.
+
+    """
+    samples = np.asarray(stationary_accel_samples, dtype=float)
+    return float(np.mean(np.linalg.norm(samples, axis=1)))
+
+
 def gravity_deviation(accel_nav) -> float:
     """
     The magnitude of a gravity-removed, navigation-frame acceleration
