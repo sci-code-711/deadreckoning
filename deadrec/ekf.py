@@ -174,7 +174,6 @@ class WindowedGravityCorrectedEKF(GravityCorrectedEKF):
             return []
 
         states = [self._seed_state(samples[0])]
-        window_size = 2 * self.window_radius + 1
 
         for r in range(1, len(samples)):
             prev_attitude = self.attitude
@@ -196,9 +195,7 @@ class WindowedGravityCorrectedEKF(GravityCorrectedEKF):
                 deviations.append(gravity_deviation(accel_nav_pred))
 
             if max(deviations) < self.deviation_threshold:
-                attitude = self._windowed_correction(
-                    samples, rmin, rmax, window_size, predicted_attitude
-                )
+                attitude = self._windowed_correction(samples, rmin, rmax, predicted_attitude)
                 accel_nav = accel_to_nav_frame(
                     samples[r].accel, attitude, self.gravity_magnitude, self.gravity_direction
                 )
@@ -249,20 +246,20 @@ class WindowedGravityCorrectedEKF(GravityCorrectedEKF):
 
         return rmin, min(rmax, n)
 
-    def _windowed_correction(self, samples, rmin, rmax, window_size, predicted_attitude):
+    def _windowed_correction(self, samples, rmin, rmax, predicted_attitude):
         heading = _heading_only(predicted_attitude)
 
+        # Normalised by the actual number of samples in [rmin, rmax) rather
+        # than the full 2 * window_radius + 1, so a window clipped near
+        # either end of the sample sequence still averages to a unit-weight
+        # estimate instead of being diluted relative to an interior window.
         gravity_mat = np.zeros((4, 4))
+        window_len = rmax - rmin
         for row in range(rmin, rmax):
             tilt = attitude_aligning_vectors(samples[row].accel, self.gravity_direction)
             qg = heading * tilt
             qgv = np.array([qg.w, qg.x, qg.y, qg.z])
-            # Divides by the full window size even when the window is
-            # clipped near either end of the sample sequence, matching
-            # EKF_fut.py - so a clipped window's gravity estimate carries
-            # proportionally less weight than a full one, rather than being
-            # renormalised to it.
-            gravity_mat = gravity_mat + np.outer(qgv, qgv) / window_size
+            gravity_mat = gravity_mat + np.outer(qgv, qgv) / window_len
 
         predicted_v = np.array(
             [predicted_attitude.w, predicted_attitude.x, predicted_attitude.y, predicted_attitude.z]
