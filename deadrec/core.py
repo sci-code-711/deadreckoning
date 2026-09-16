@@ -33,7 +33,7 @@ class Core:
             connector.start()
         self.transformer_instance.start()
 
-    def terminate(self, force=False):
-        self.i_connector.join()
-        self.transformer_instance.join()
-        self.o_connector.join()
+    def terminate(self, force=False, timeout=None):
+        self.i_connector.join(timeout)
+        self.transformer_instance.join(timeout)
+        self.o_connector.join(timeout)

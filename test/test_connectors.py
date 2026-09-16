@@ -1,4 +1,4 @@
-from deadrec.connectors import FromCSV, LiveCSVReplay, ToSQLite
+from deadrec.connectors import FromCSV, LiveCSVReplay, ToCSV, ToSQLite
 from deadrec.runners import TerminateSignal
 from deadrec.samples import ImuSample
 import sqlite3
@@ -95,6 +95,28 @@ def test_live_csv_replay_never_sleeps_for_a_single_sample(tmp_path):
 
     assert len(samples) == 1
     assert sleep_calls == []
+
+
+def test_to_csv_writes_header_when_given(tmp_path):
+    out_path = tmp_path / "out.csv"
+    connector = ToCSV(str(out_path), header=["t", "x", "y"])
+    connector.input_stream.put(["0", "1", "2"])
+    connector.input_stream.put(TerminateSignal(True, None))
+
+    connector.run()
+
+    assert out_path.read_text() == "t,x,y\n0,1,2\n"
+
+
+def test_to_csv_omits_header_by_default(tmp_path):
+    out_path = tmp_path / "out.csv"
+    connector = ToCSV(str(out_path))
+    connector.input_stream.put(["0", "1", "2"])
+    connector.input_stream.put(TerminateSignal(True, None))
+
+    connector.run()
+
+    assert out_path.read_text() == "0,1,2\n"
 
 
 def test_to_sqlite_writes_rows(tmp_path):

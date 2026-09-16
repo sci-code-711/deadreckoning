@@ -3,6 +3,7 @@ from multiprocessing import Queue
 
 import pytest
 
+from deadrec.calibration import CalibrationCoefficients, apply_calibration
 from deadrec.dead_reckoning import DeadReckoner
 from deadrec.ekf import GravityCorrectedEKF
 from deadrec.io import trajectory_state_to_row
@@ -57,6 +58,49 @@ def test_transformation_works_with_ekf_reckoner():
 
     row = transformer.transformation(sample)
     expected_row = [str(value) for value in trajectory_state_to_row(reference.step(sample))]
+    assert row == expected_row
+
+
+def test_transformation_applies_calibration_before_stepping():
+    coeffs = CalibrationCoefficients.from_raw_coefficients(
+        accel_coeffs=[0, 0, 0, 1.1, 1.1, 1.1, 0.01, 0.01, 0.01],
+        gyro_coeffs=[0, 0, 0, 0, 0, 0, 1, 1, 1],
+        gyro_bias=[0, 0, 0],
+    )
+    reckoner = DeadReckoner(Quaternion(1, 0, 0, 0), gravity_magnitude=1.0)
+    reference = DeadReckoner(Quaternion(1, 0, 0, 0), gravity_magnitude=1.0)
+    transformer = ReconstructionTransformer(Queue(), Queue(), reckoner=reckoner, calibration=coeffs)
+
+    sample = ImuSample(t=0.0, accel=[0, 0, 1], gyro=[1, 2, 3])
+
+    row = transformer.transformation(sample)
+    expected_row = [
+        str(value)
+        for value in trajectory_state_to_row(reference.step(apply_calibration(sample, coeffs)))
+    ]
+
+    assert row == expected_row
+    # And it must actually differ from the uncalibrated result - otherwise
+    # this test wouldn't catch calibration silently not being applied.
+    uncalibrated_row = [
+        str(value)
+        for value in trajectory_state_to_row(
+            DeadReckoner(Quaternion(1, 0, 0, 0), gravity_magnitude=1.0).step(sample)
+        )
+    ]
+    assert row != uncalibrated_row
+
+
+def test_transformation_without_calibration_uses_raw_sample():
+    reckoner = DeadReckoner(Quaternion(1, 0, 0, 0), gravity_magnitude=1.0)
+    reference = DeadReckoner(Quaternion(1, 0, 0, 0), gravity_magnitude=1.0)
+    transformer = _make_transformer(reckoner)
+
+    sample = ImuSample(t=0.0, accel=[0, 0, 1], gyro=[1, 2, 3])
+
+    row = transformer.transformation(sample)
+    expected_row = [str(value) for value in trajectory_state_to_row(reference.step(sample))]
+
     assert row == expected_row
 
 

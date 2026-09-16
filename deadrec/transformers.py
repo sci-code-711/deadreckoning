@@ -3,6 +3,7 @@ from multiprocessing import Queue
 from abc import ABC, abstractmethod
 from time import monotonic
 
+from .calibration import CalibrationCoefficients, apply_calibration
 from .io import trajectory_state_to_row
 from .logger import get_worker_logger
 from .samples import ImuSample
@@ -58,6 +59,11 @@ class ReconstructionTransformer(TransformerBase):
           warning, e.g. the default ``0.5`` warns once a step takes more
           than half as long as the gap between samples. Has no effect
           without ``log_queue``.
+        * calibration {``CalibrationCoefficients``} -- If given, applied to
+          each sample (see :func:`deadrec.calibration.apply_calibration`)
+          before it's passed to ``reckoner.step()``. Calibration is a
+          per-sample operation, so unlike low-pass filtering it works fine
+          on a live/streamed sample at a time. Defaults to no calibration.
 
     """
 
@@ -69,10 +75,12 @@ class ReconstructionTransformer(TransformerBase):
         reckoner,
         log_queue: Queue = None,
         latency_warning_threshold: float = 0.5,
+        calibration: CalibrationCoefficients = None,
     ):
         self.reckoner = reckoner
         self.log_queue = log_queue
         self.latency_warning_threshold = latency_warning_threshold
+        self.calibration = calibration
         self.logger = None
         self._prev_t = None
         super().__init__(i_stream, o_stream)
@@ -88,6 +96,9 @@ class ReconstructionTransformer(TransformerBase):
         return super().run()
 
     def transformation(self, item: ImuSample) -> list:
+        if self.calibration is not None:
+            item = apply_calibration(item, self.calibration)
+
         start = monotonic()
         try:
             state = self.reckoner.step(item)

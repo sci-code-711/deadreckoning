@@ -144,13 +144,26 @@ class LiveCSVReplay(IngestConnector):
 
 
 class ToCSV(OutputConnector):
-    def __init__(self, file_handle: str, sep: str = ","):
+    def __init__(self, file_handle: str, sep: str = ",", header: List[str] = None):
+        """
+        Args:
+            * file_handle {``str``} -- Path to write the CSV file to.
+            * sep {``str``} -- Column delimiter. Defaults to ``,``.
+            * header {``List[str]``} -- If given, written as the first line
+              of the file before any rows. Defaults to ``None`` (no header
+              line), matching prior behaviour.
+
+        """
         self.file_handle = file_handle
         self.delimiter = sep
+        self.header = header
         super().__init__()
 
     def run(self):
         with open(self.file_handle, "w") as csv_file:
+            if self.header is not None:
+                csv_file.write(self.delimiter.join(self.header) + "\n")
+
             while True:
                 item = self.input_stream.get()
                 if isinstance(item, TerminateSignal):
