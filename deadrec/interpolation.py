@@ -103,3 +103,56 @@ class ZeroOrderHoldInterpolator(AngularRateInterpolator):
             return w0
 
         return omega
+
+
+class CentredCubicHermiteInterpolator(AngularRateInterpolator):
+    """
+    Cubic Hermite interpolation through the step's two endpoint samples,
+    with finite-difference ("Catmull-Rom"-style) tangents estimated from
+    one extra sample of context either side. Non-causal - needs one sample
+    of look-ahead beyond the step's end sample, so only usable by a batch
+    reckoner that holds the full sample sequence up front (i.e.
+    :class:`deadrec.ekf.WindowedGravityCorrectedEKF`).
+
+    Near either end of a sample sequence, gracefully clips to whatever
+    context is actually available rather than raising - falling back to a
+    one-sided finite difference (or, with no context available at all, a
+    tangent equal to the endpoint secant, making the interpolant reduce
+    exactly to linear) instead of a centred one.
+    """
+
+    context_before = 1
+    context_after = 1
+
+    def build(self, window: Sequence[ImuSample], step_pos: int) -> Callable[[float], np.ndarray]:
+        start, end = window[step_pos - 1], window[step_pos]
+        t0, t1 = start.t, end.t
+        p0 = np.radians(start.gyro)
+        p1 = np.radians(end.gyro)
+        span = t1 - t0
+        secant = (p1 - p0) / span if span != 0 else np.zeros(3)
+
+        before = window[step_pos - 2] if step_pos - 2 >= 0 else None
+        after = window[step_pos + 1] if step_pos + 1 < len(window) else None
+
+        if before is not None and before.t != t1:
+            m0 = (p1 - np.radians(before.gyro)) / (t1 - before.t)
+        else:
+            m0 = secant
+
+        if after is not None and after.t != t0:
+            m1 = (np.radians(after.gyro) - p0) / (after.t - t0)
+        else:
+            m1 = secant
+
+        def omega(t: float) -> np.ndarray:
+            if span == 0:
+                return p0
+            s = (t - t0) / span
+            h00 = 2 * s**3 - 3 * s**2 + 1
+            h10 = s**3 - 2 * s**2 + s
+            h01 = -2 * s**3 + 3 * s**2
+            h11 = s**3 - s**2
+            return h00 * p0 + h10 * span * m0 + h01 * p1 + h11 * span * m1
+
+        return omega
