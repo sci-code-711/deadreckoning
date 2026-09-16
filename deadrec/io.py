@@ -56,6 +56,25 @@ def read_imu_csv(path) -> list[ImuSample]:
     return samples
 
 
+def write_imu_csv(samples: list[ImuSample], path) -> None:
+    """
+    Write IMU samples to a CSV file with columns ``t, ax, ay, az, vl, vm,
+    vn`` - the inverse of :func:`read_imu_csv`.
+
+    Args:
+        * samples {``Iterable[ImuSample]``} -- The samples to write, in
+          time order.
+        * path {``str`` or ``Path``} -- Path to write the CSV file to.
+
+    """
+    with open(path, "w", newline="") as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerow(["t", "ax", "ay", "az", "vl", "vm", "vn"])
+
+        for sample in samples:
+            writer.writerow([sample.t, *sample.accel, *sample.gyro])
+
+
 def write_trajectory_csv(states: list[TrajectoryState], path) -> None:
     """
     Write reconstructed trajectory states to a CSV file: timestamp,

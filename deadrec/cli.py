@@ -14,8 +14,9 @@ from .calibration import CalibrationCoefficients, apply_calibration
 from .dead_reckoning import DeadReckoner
 from .ekf import GravityCorrectedEKF, WindowedGravityCorrectedEKF
 from .filtering import moving_average_filter
-from .io import read_imu_csv, write_trajectory_csv
+from .io import read_imu_csv, write_imu_csv, write_trajectory_csv
 from .samples import ImuSample
+from .simulate import TRAJECTORIES, sample_trajectory
 
 _METHODS = {
     "simple": DeadReckoner,
@@ -103,6 +104,46 @@ def _build_parser() -> argparse.ArgumentParser:
         "Defaults to that method's own default.",
     )
 
+    simulate_parser = subparsers.add_parser(
+        "simulate",
+        help="Generate synthetic IMU readings and ground truth for a known trajectory.",
+    )
+    simulate_parser.add_argument(
+        "--trajectory",
+        choices=sorted(TRAJECTORIES),
+        required=True,
+        help="The named trajectory to sample.",
+    )
+    simulate_parser.add_argument(
+        "--duration", type=float, required=True, help="Duration to sample, in seconds."
+    )
+    simulate_parser.add_argument("--rate", type=float, required=True, help="Sample rate, in Hz.")
+    simulate_parser.add_argument(
+        "--seed", type=int, default=0, help="Seed for optional noise. Defaults to 0."
+    )
+    simulate_parser.add_argument(
+        "--noise-std-accel",
+        type=float,
+        default=0.0,
+        help="Standard deviation of Gaussian noise added to accelerometer "
+        "readings. Defaults to 0 (noiseless).",
+    )
+    simulate_parser.add_argument(
+        "--noise-std-gyro",
+        type=float,
+        default=0.0,
+        help="Standard deviation of Gaussian noise added to gyroscope "
+        "readings. Defaults to 0 (noiseless).",
+    )
+    simulate_parser.add_argument(
+        "--readings-out",
+        required=True,
+        help="Path to write the synthetic readings CSV to (t, ax, ay, az, vl, vm, vn).",
+    )
+    simulate_parser.add_argument(
+        "--truth-out", required=True, help="Path to write the ground-truth trajectory CSV to."
+    )
+
     return parser
 
 
@@ -164,11 +205,29 @@ def run(args: argparse.Namespace) -> None:
     write_trajectory_csv(states, args.out_path)
 
 
+def simulate(args: argparse.Namespace) -> None:
+    """Generate synthetic IMU readings and ground truth for the ``simulate`` subcommand."""
+    trajectory = TRAJECTORIES[args.trajectory]()
+    samples, truth = sample_trajectory(
+        trajectory,
+        duration_s=args.duration,
+        rate_hz=args.rate,
+        noise_std_accel=args.noise_std_accel,
+        noise_std_gyro=args.noise_std_gyro,
+        seed=args.seed,
+    )
+
+    write_imu_csv(samples, args.readings_out)
+    write_trajectory_csv(truth, args.truth_out)
+
+
 def main(argv=None) -> int:
     args = _build_parser().parse_args(argv)
 
     if args.command == "run":
         run(args)
+    elif args.command == "simulate":
+        simulate(args)
 
     return 0
 
