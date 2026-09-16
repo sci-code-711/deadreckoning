@@ -1,7 +1,41 @@
-from deadrec.connectors import ToSQLite
+from deadrec.connectors import FromCSV, ToSQLite
 from deadrec.runners import TerminateSignal
 import sqlite3
 import pytest
+
+
+def _drain(connector):
+    rows = []
+    while True:
+        item = connector.output_stream.get()
+        if isinstance(item, TerminateSignal):
+            return rows, item
+        rows.append(item)
+
+
+def test_from_csv_skips_header_by_default(tmp_path):
+    csv_path = tmp_path / "input.csv"
+    csv_path.write_text("t,ax,ay,az\n1,0.1,0.2,0.3\n2,0.4,0.5,0.6\n")
+
+    connector = FromCSV(str(csv_path))
+    connector.run()
+
+    rows, terminate_signal = _drain(connector)
+
+    assert rows == [["1", "0.1", "0.2", "0.3"], ["2", "0.4", "0.5", "0.6"]]
+    assert terminate_signal.success is True
+
+
+def test_from_csv_skip_header_false_includes_first_line(tmp_path):
+    csv_path = tmp_path / "input.csv"
+    csv_path.write_text("t,ax,ay,az\n1,0.1,0.2,0.3\n")
+
+    connector = FromCSV(str(csv_path), skip_header=False)
+    connector.run()
+
+    rows, _ = _drain(connector)
+
+    assert rows == [["t", "ax", "ay", "az"], ["1", "0.1", "0.2", "0.3"]]
 
 
 def test_to_sqlite_writes_rows(tmp_path):

@@ -40,13 +40,27 @@ class OutputConnector(Connector):
 
 
 class FromCSV(IngestConnector):
-    def __init__(self, file_handle: str, sep: str = ","):
+    def __init__(self, file_handle: str, sep: str = ",", skip_header: bool = True):
+        """
+        Args:
+            * file_handle {``str``} -- Path to the CSV file to read.
+            * sep {``str``} -- Column delimiter. Defaults to ``,``.
+            * skip_header {``bool``} -- If ``True`` (the default), the
+              first line of the file is consumed and discarded rather than
+              pushed onto ``output_stream`` as a data row. Defaults to
+              ``True`` since real CSVs almost always have a header row.
+
+        """
         self.file_handle = file_handle
         self.delimiter = sep
+        self.skip_header = skip_header
         super().__init__()
 
     def run(self):
         with open(self.file_handle) as csv_file:
+            if self.skip_header:
+                next(csv_file, None)
+
             for line in csv_file:
                 row = line.rstrip().split(self.delimiter)
                 self.output_stream.put(row)
