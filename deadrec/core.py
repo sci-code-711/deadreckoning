@@ -12,6 +12,7 @@ class Core:
     def __init__(self, name: str):
         self.name = name
         self.transformer = DefaultTransformer
+        self.transformer_kwargs: dict = {}
         self.connectors: List[Process] = []
 
     def set_input_connector(self, connector: Process):
@@ -25,7 +26,9 @@ class Core:
         self.connectors.append(connector)
 
     def launch(self):
-        self.transformer_instance = self.transformer(self.i_stream, self.o_stream)
+        self.transformer_instance = self.transformer(
+            self.i_stream, self.o_stream, **self.transformer_kwargs
+        )
         for connector in self.connectors[::-1]:
             connector.start()
         self.transformer_instance.start()

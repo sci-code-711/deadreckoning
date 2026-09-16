@@ -1,5 +1,6 @@
-from deadrec.connectors import FromCSV, ToSQLite
+from deadrec.connectors import FromCSV, LiveCSVReplay, ToSQLite
 from deadrec.runners import TerminateSignal
+from deadrec.samples import ImuSample
 import sqlite3
 import pytest
 
@@ -36,6 +37,64 @@ def test_from_csv_skip_header_false_includes_first_line(tmp_path):
     rows, _ = _drain(connector)
 
     assert rows == [["t", "ax", "ay", "az"], ["1", "0.1", "0.2", "0.3"]]
+
+
+def _drain_samples(connector):
+    samples = []
+    while True:
+        item = connector.output_stream.get()
+        if isinstance(item, TerminateSignal):
+            return samples, item
+        samples.append(item)
+
+
+def test_live_csv_replay_paces_between_samples_using_sleep_fn(tmp_path):
+    csv_path = tmp_path / "input.csv"
+    csv_path.write_text(
+        "t,ax,ay,az,vl,vm,vn\n0,0.1,0.2,0.3,1,2,3\n1000,0.4,0.5,0.6,4,5,6\n3000,0.7,0.8,0.9,7,8,9\n"
+    )
+    sleep_calls = []
+
+    connector = LiveCSVReplay(
+        str(csv_path), time_divisor=1000.0, speed=2.0, sleep_fn=sleep_calls.append
+    )
+    connector.run()
+
+    samples, terminate_signal = _drain_samples(connector)
+
+    assert [s.t for s in samples] == pytest.approx([0.0, 1.0, 3.0])
+    assert all(isinstance(sample, ImuSample) for sample in samples)
+    # Real dt after the /1000 divisor is 1.0s then 2.0s; /speed=2.0 halves both.
+    assert sleep_calls == pytest.approx([0.5, 1.0])
+    assert terminate_signal.success is True
+
+
+def test_live_csv_replay_defaults_to_no_time_conversion_and_real_time_pacing(tmp_path):
+    csv_path = tmp_path / "input.csv"
+    csv_path.write_text("t,ax,ay,az,vl,vm,vn\n0,0.1,0.2,0.3,1,2,3\n0.5,0.4,0.5,0.6,4,5,6\n")
+    sleep_calls = []
+
+    connector = LiveCSVReplay(str(csv_path), sleep_fn=sleep_calls.append)
+    connector.run()
+
+    samples, _ = _drain_samples(connector)
+
+    assert [s.t for s in samples] == pytest.approx([0.0, 0.5])
+    assert sleep_calls == pytest.approx([0.5])
+
+
+def test_live_csv_replay_never_sleeps_for_a_single_sample(tmp_path):
+    csv_path = tmp_path / "input.csv"
+    csv_path.write_text("t,ax,ay,az,vl,vm,vn\n0,0.1,0.2,0.3,1,2,3\n")
+    sleep_calls = []
+
+    connector = LiveCSVReplay(str(csv_path), sleep_fn=sleep_calls.append)
+    connector.run()
+
+    samples, _ = _drain_samples(connector)
+
+    assert len(samples) == 1
+    assert sleep_calls == []
 
 
 def test_to_sqlite_writes_rows(tmp_path):
