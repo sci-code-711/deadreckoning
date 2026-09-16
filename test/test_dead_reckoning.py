@@ -5,7 +5,11 @@ import pytest
 
 from deadrec.attitude import estimate_gravity_magnitude, initial_attitude_from_gravity
 from deadrec.dead_reckoning import DeadReckoner, accel_to_nav_frame
-from deadrec.interpolation import AngularRateInterpolator, ZeroOrderHoldInterpolator
+from deadrec.interpolation import (
+    AngularRateInterpolator,
+    CentredCubicHermiteInterpolator,
+    ZeroOrderHoldInterpolator,
+)
 from deadrec.quaternion import Quaternion
 from deadrec.samples import ImuSample
 
@@ -127,6 +131,15 @@ def test_dead_reckoner_rejects_non_causal_interpolator_at_construction():
     with pytest.raises(ValueError, match="_NonCausalInterpolator"):
         DeadReckoner(
             Quaternion(1, 0, 0, 0), gravity_magnitude=9.8, interpolator=_NonCausalInterpolator()
+        )
+
+
+def test_dead_reckoner_rejects_centred_cubic_hermite_interpolator_at_construction():
+    with pytest.raises(ValueError, match="CentredCubicHermiteInterpolator"):
+        DeadReckoner(
+            Quaternion(1, 0, 0, 0),
+            gravity_magnitude=9.8,
+            interpolator=CentredCubicHermiteInterpolator(),
         )
 
 
