@@ -6,9 +6,54 @@ import pytest
 
 from deadrec.attitude import estimate_gravity_magnitude, initial_attitude_from_gravity
 from deadrec.dead_reckoning import DeadReckoner
-from deadrec.io import read_imu_csv, write_trajectory_csv
+from deadrec.io import (
+    imu_sample_from_row,
+    read_imu_csv,
+    trajectory_state_to_row,
+    write_trajectory_csv,
+)
 from deadrec.quaternion import Quaternion
 from deadrec.samples import ImuSample, TrajectoryState
+
+
+def test_imu_sample_from_row_known_values():
+    row = {
+        "t": "12.5",
+        "ax": "0.1",
+        "ay": "0.2",
+        "az": "0.3",
+        "vl": "1.0",
+        "vm": "2.0",
+        "vn": "3.0",
+    }
+
+    sample = imu_sample_from_row(row)
+
+    assert sample.t == pytest.approx(12.5)
+    assert np.allclose(sample.accel, [0.1, 0.2, 0.3])
+    assert np.allclose(sample.gyro, [1.0, 2.0, 3.0])
+
+
+def test_imu_sample_from_row_missing_column_raises():
+    row = {"t": "0", "ax": "1", "ay": "2", "az": "3", "vl": "4", "vm": "5"}
+
+    with pytest.raises(KeyError):
+        imu_sample_from_row(row)
+
+
+def test_trajectory_state_to_row_known_values():
+    state = TrajectoryState(
+        t=0.5,
+        attitude=Quaternion(1, 0, 0, 0),
+        accel_nav=[0.1, 0.2, 0.3],
+        velocity=[0.01, 0.02, 0.03],
+        position=[1.0, 2.0, 3.0],
+        euler=(0.4, 0.5, 0.6),
+    )
+
+    row = trajectory_state_to_row(state)
+
+    assert row == [0.5, 1, 0, 0, 0, 0.1, 0.2, 0.3, 0.01, 0.02, 0.03, 1.0, 2.0, 3.0, 0.4, 0.5, 0.6]
 
 
 def test_read_imu_csv_reads_example_data():
