@@ -15,6 +15,7 @@ from deadrec.ekf import (
     _blend_attitudes,
     _heading_only,
 )
+from deadrec.interpolation import AngularRateInterpolator
 from deadrec.quaternion import Quaternion
 from deadrec.samples import ImuSample
 
@@ -95,6 +96,55 @@ def test_gravity_corrected_ekf_pulls_tilted_attitude_toward_level():
     initial_pitch = initial.to_euler_angles()[0]
     ekf_pitch = ekf_state.attitude.to_euler_angles()[0]
     assert 0 < ekf_pitch < initial_pitch
+
+
+class _NonCausalInterpolator(AngularRateInterpolator):
+    """Minimal test double: declares look-ahead context it doesn't actually
+    use, purely to exercise the causal/non-causal compatibility check. A
+    real non-causal interpolator (CentredCubicHermiteInterpolator) is
+    exercised end-to-end elsewhere."""
+
+    context_after = 1
+
+    def build(self, window, step_pos):
+        start, end = window[step_pos - 1], window[step_pos]
+        w0 = np.radians(start.gyro)
+        w1 = np.radians(end.gyro)
+        t0, t1 = start.t, end.t
+
+        def omega(t):
+            span = t1 - t0
+            if span == 0:
+                return w0
+            frac = (t - t0) / span
+            return w0 + frac * (w1 - w0)
+
+        return omega
+
+
+def test_gravity_corrected_ekf_rejects_non_causal_interpolator_at_construction():
+    with pytest.raises(ValueError, match="_NonCausalInterpolator"):
+        GravityCorrectedEKF(
+            Quaternion(1, 0, 0, 0), gravity_magnitude=9.8, interpolator=_NonCausalInterpolator()
+        )
+
+
+def test_windowed_ekf_accepts_non_causal_interpolator():
+    samples = [
+        ImuSample(t=0.0, accel=[0.0, 0.0, 9.8], gyro=[0.0, 0.0, 0.0]),
+        ImuSample(t=0.1, accel=[0.1, 0.0, 9.8], gyro=[5.0, 0.0, 0.0]),
+        ImuSample(t=0.2, accel=[0.0, 0.1, 9.8], gyro=[0.0, 5.0, 0.0]),
+        ImuSample(t=0.3, accel=[0.0, 0.0, 9.8], gyro=[0.0, 0.0, 5.0]),
+    ]
+
+    ekf = WindowedGravityCorrectedEKF(
+        Quaternion(1, 0, 0, 0), gravity_magnitude=9.8, interpolator=_NonCausalInterpolator()
+    )
+    states = ekf.run(samples)
+
+    assert len(states) == len(samples)
+    for state in states:
+        assert abs(state.attitude) == pytest.approx(1.0)
 
 
 # --- Independent reference implementation, used only to regression-test
