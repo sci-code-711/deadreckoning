@@ -68,7 +68,7 @@ def test_transformation_without_a_logger_does_not_raise():
     transformer.transformation(ImuSample(t=0.1, accel=[0, 0, 1], gyro=[0, 0, 0]))
 
 
-def test_transformation_warns_when_falling_behind_real_time(monkeypatch):
+def test_transformation_warns_when_exceeding_latency_threshold(monkeypatch):
     reckoner = DeadReckoner(Quaternion(1, 0, 0, 0), gravity_magnitude=1.0)
     transformer = _make_transformer(reckoner)
     transformer.logger = _FakeLogger()
@@ -85,7 +85,8 @@ def test_transformation_warns_when_falling_behind_real_time(monkeypatch):
 
     monkeypatch.setattr(reckoner, "step", slow_step)
 
-    # dt to this sample is 1ms, but the (patched) step takes ~20ms.
+    # dt to this sample is 1ms, but the (patched) step takes ~20ms - well past
+    # the default 0.5 threshold, without even needing to exceed the full dt.
     transformer.transformation(ImuSample(t=0.001, accel=[0, 0, 1], gyro=[0, 0, 0]))
 
     assert len(transformer.logger.warnings) == 1
@@ -100,7 +101,41 @@ def test_transformation_does_not_warn_when_keeping_up():
     transformer.transformation(ImuSample(t=1.0, accel=[0, 0, 1], gyro=[0, 0, 0]))
 
     assert transformer.logger.warnings == []
-    assert len(transformer.logger.infos) == 2
+
+
+def test_transformation_never_logs_per_step_info():
+    reckoner = DeadReckoner(Quaternion(1, 0, 0, 0), gravity_magnitude=1.0)
+    transformer = _make_transformer(reckoner)
+    transformer.logger = _FakeLogger()
+
+    transformer.transformation(ImuSample(t=0.0, accel=[0, 0, 1], gyro=[0, 0, 0]))
+    transformer.transformation(ImuSample(t=0.1, accel=[0, 0, 1], gyro=[0, 0, 0]))
+
+    assert transformer.logger.infos == []
+
+
+def test_transformation_latency_warning_threshold_is_configurable(monkeypatch):
+    reckoner = DeadReckoner(Quaternion(1, 0, 0, 0), gravity_magnitude=1.0)
+    transformer = ReconstructionTransformer(
+        Queue(), Queue(), reckoner=reckoner, latency_warning_threshold=0.9
+    )
+    transformer.logger = _FakeLogger()
+
+    transformer.transformation(ImuSample(t=0.0, accel=[0, 0, 1], gyro=[0, 0, 0]))
+
+    original_step = reckoner.step
+
+    def slow_step(sample):
+        time.sleep(0.02)
+        return original_step(sample)
+
+    monkeypatch.setattr(reckoner, "step", slow_step)
+
+    # dt is 100ms; the ~20ms (patched) step exceeds the default 0.5 threshold
+    # (50ms) but not this transformer's 0.9 threshold (90ms).
+    transformer.transformation(ImuSample(t=0.1, accel=[0, 0, 1], gyro=[0, 0, 0]))
+
+    assert transformer.logger.warnings == []
 
 
 def test_transformation_logs_and_reraises_on_exception():

@@ -49,16 +49,30 @@ class ReconstructionTransformer(TransformerBase):
           the caller's responsibility.
         * log_queue {``multiprocessing.Queue``} -- If given, a worker logger
           (see :func:`deadrec.logger.get_worker_logger`) is set up in this
-          transformer's own process to record per-step processing latency,
-          and to warn when a step takes longer than the real time gap since
-          the previous sample - i.e. when the reconstruction is falling
-          behind real-time arrival. If omitted, no logging is done.
+          transformer's own process to warn when a step's processing time
+          exceeds ``latency_warning_threshold`` of the real time gap since
+          the previous sample - i.e. when the reconstruction is at risk of
+          falling behind real-time arrival. If omitted, no logging is done.
+        * latency_warning_threshold {``float``} -- Fraction of the sample
+          interval a step's processing time must exceed to be logged as a
+          warning, e.g. the default ``0.5`` warns once a step takes more
+          than half as long as the gap between samples. Has no effect
+          without ``log_queue``.
 
     """
 
-    def __init__(self, i_stream: Queue, o_stream: Queue, *, reckoner, log_queue: Queue = None):
+    def __init__(
+        self,
+        i_stream: Queue,
+        o_stream: Queue,
+        *,
+        reckoner,
+        log_queue: Queue = None,
+        latency_warning_threshold: float = 0.5,
+    ):
         self.reckoner = reckoner
         self.log_queue = log_queue
+        self.latency_warning_threshold = latency_warning_threshold
         self.logger = None
         self._prev_t = None
         super().__init__(i_stream, o_stream)
@@ -83,18 +97,17 @@ class ReconstructionTransformer(TransformerBase):
             raise
         elapsed = monotonic() - start
 
-        if self.logger is not None:
-            self.logger.info("step t=%.6f processed in %.6fs", item.t, elapsed)
-            if self._prev_t is not None:
-                dt = item.t - self._prev_t
-                if elapsed > dt:
-                    self.logger.warning(
-                        "step t=%.6f took %.6fs, exceeding the %.6fs sample interval - "
-                        "falling behind real-time",
-                        item.t,
-                        elapsed,
-                        dt,
-                    )
+        if self.logger is not None and self._prev_t is not None:
+            dt = item.t - self._prev_t
+            if dt > 0 and elapsed > self.latency_warning_threshold * dt:
+                self.logger.warning(
+                    "step t=%.6f took %.6fs, exceeding %.0f%% of the %.6fs sample interval - "
+                    "reconstruction may be falling behind real-time",
+                    item.t,
+                    elapsed,
+                    self.latency_warning_threshold * 100,
+                    dt,
+                )
         self._prev_t = item.t
 
         return [str(value) for value in trajectory_state_to_row(state)]
