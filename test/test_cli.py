@@ -246,6 +246,79 @@ def test_run_missing_required_args_raises():
         main(["run", "--in", "in.csv"])
 
 
+def test_run_interpolator_zoh_runs_cleanly_end_to_end(tmp_path):
+    out_path = tmp_path / "out.csv"
+
+    exit_code = main(
+        [
+            "run",
+            "--in",
+            str(_EXAMPLE_DATA),
+            "--out",
+            str(out_path),
+            "--time-divisor",
+            "1000",
+            "--interpolator",
+            "zoh",
+        ]
+    )
+
+    assert exit_code == 0
+    with open(out_path, newline="") as csv_file:
+        rows = list(csv.DictReader(csv_file))
+    assert len(rows) > 0
+
+
+def test_run_simple_with_cubic_hermite_interpolator_fails_cleanly(tmp_path, capsys):
+    out_path = tmp_path / "out.csv"
+
+    exit_code = main(
+        [
+            "run",
+            "--in",
+            str(_EXAMPLE_DATA),
+            "--out",
+            str(out_path),
+            "--method",
+            "simple",
+            "--time-divisor",
+            "1000",
+            "--interpolator",
+            "cubic-hermite",
+        ]
+    )
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.err.startswith("error:")
+    assert not out_path.exists()
+
+
+def test_run_ekf_fut_with_cubic_hermite_interpolator_succeeds(tmp_path):
+    out_path = tmp_path / "out.csv"
+
+    exit_code = main(
+        [
+            "run",
+            "--in",
+            str(_EXAMPLE_DATA),
+            "--out",
+            str(out_path),
+            "--method",
+            "ekf-fut",
+            "--time-divisor",
+            "1000",
+            "--interpolator",
+            "cubic-hermite",
+        ]
+    )
+
+    assert exit_code == 0
+    with open(out_path, newline="") as csv_file:
+        rows = list(csv.DictReader(csv_file))
+    assert len(rows) > 0
+
+
 _STREAM_CSV = (
     "t,ax,ay,az,vl,vm,vn\n"
     "0.0,0.0,0.0,1.0,0,0,0\n"
@@ -393,3 +466,53 @@ def test_stream_rejects_filter_range():
 def test_stream_missing_required_args_raises():
     with pytest.raises(SystemExit):
         main(["stream", "--in", "in.csv"])
+
+
+def test_stream_interpolator_zoh_runs_cleanly_end_to_end(tmp_path):
+    in_path = tmp_path / "in.csv"
+    in_path.write_text(_STREAM_CSV)
+    out_path = tmp_path / "out.csv"
+
+    exit_code = _run_main_with_timeout(
+        [
+            "stream",
+            "--in",
+            str(in_path),
+            "--out",
+            str(out_path),
+            "--method",
+            "simple",
+            "--interpolator",
+            "zoh",
+        ]
+    )
+
+    assert exit_code == 0
+    with open(out_path, newline="") as csv_file:
+        rows = list(csv.DictReader(csv_file))
+    assert len(rows) > 0
+
+
+def test_stream_with_cubic_hermite_interpolator_fails_cleanly(tmp_path, capsys):
+    in_path = tmp_path / "in.csv"
+    in_path.write_text(_STREAM_CSV)
+    out_path = tmp_path / "out.csv"
+
+    exit_code = _run_main_with_timeout(
+        [
+            "stream",
+            "--in",
+            str(in_path),
+            "--out",
+            str(out_path),
+            "--method",
+            "simple",
+            "--interpolator",
+            "cubic-hermite",
+        ]
+    )
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.err.startswith("error:")
+    assert not out_path.exists()
