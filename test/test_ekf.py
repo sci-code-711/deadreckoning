@@ -15,7 +15,7 @@ from deadrec.ekf import (
     _blend_attitudes,
     _heading_only,
 )
-from deadrec.interpolation import AngularRateInterpolator
+from deadrec.interpolation import AngularRateInterpolator, CentredCubicHermiteInterpolator
 from deadrec.quaternion import Quaternion
 from deadrec.samples import ImuSample
 
@@ -127,6 +127,34 @@ def test_gravity_corrected_ekf_rejects_non_causal_interpolator_at_construction()
         GravityCorrectedEKF(
             Quaternion(1, 0, 0, 0), gravity_magnitude=9.8, interpolator=_NonCausalInterpolator()
         )
+
+
+def test_gravity_corrected_ekf_rejects_centred_cubic_hermite_interpolator_at_construction():
+    with pytest.raises(ValueError, match="CentredCubicHermiteInterpolator"):
+        GravityCorrectedEKF(
+            Quaternion(1, 0, 0, 0),
+            gravity_magnitude=9.8,
+            interpolator=CentredCubicHermiteInterpolator(),
+        )
+
+
+def test_windowed_ekf_runs_successfully_with_centred_cubic_hermite_interpolator():
+    t, accel, gyro = _load_example_data()
+    attitude_n, gravity_n = 30, 300
+    samples = [ImuSample(t=t[i], accel=accel[i], gyro=gyro[i]) for i in range(len(t))]
+
+    initial_attitude = initial_attitude_from_gravity(accel[:attitude_n])
+    gravity_magnitude = estimate_gravity_magnitude(accel[:gravity_n])
+    ekf = WindowedGravityCorrectedEKF(
+        initial_attitude, gravity_magnitude, interpolator=CentredCubicHermiteInterpolator()
+    )
+    states = ekf.run(samples)
+
+    assert len(states) == len(samples)
+    for state in states:
+        assert abs(state.attitude) == pytest.approx(1.0)
+        assert np.all(np.isfinite(state.position))
+        assert np.all(np.isfinite(state.velocity))
 
 
 def test_windowed_ekf_accepts_non_causal_interpolator():
