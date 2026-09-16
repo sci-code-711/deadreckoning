@@ -5,6 +5,7 @@ import pytest
 
 from deadrec.attitude import estimate_gravity_magnitude, initial_attitude_from_gravity
 from deadrec.dead_reckoning import DeadReckoner, accel_to_nav_frame
+from deadrec.interpolation import AngularRateInterpolator, ZeroOrderHoldInterpolator
 from deadrec.quaternion import Quaternion
 from deadrec.samples import ImuSample
 
@@ -110,6 +111,42 @@ def test_dead_reckoner_run_matches_manual_steps():
         assert run_state.attitude == manual_state.attitude
         assert np.allclose(run_state.position, manual_state.position)
         assert np.allclose(run_state.velocity, manual_state.velocity)
+
+
+class _NonCausalInterpolator(AngularRateInterpolator):
+    """Minimal test double: declares look-ahead context it doesn't actually
+    use, purely to exercise the causal/non-causal compatibility check."""
+
+    context_after = 1
+
+    def build(self, window, step_pos):
+        raise NotImplementedError("should be rejected before ever being called")
+
+
+def test_dead_reckoner_rejects_non_causal_interpolator_at_construction():
+    with pytest.raises(ValueError, match="_NonCausalInterpolator"):
+        DeadReckoner(
+            Quaternion(1, 0, 0, 0), gravity_magnitude=9.8, interpolator=_NonCausalInterpolator()
+        )
+
+
+def test_dead_reckoner_run_with_zero_order_hold_interpolator_is_sane():
+    samples = [
+        ImuSample(t=0.0, accel=[0.0, 0.0, 9.8], gyro=[0.0, 0.0, 0.0]),
+        ImuSample(t=0.1, accel=[0.1, 0.0, 9.8], gyro=[5.0, 0.0, 0.0]),
+        ImuSample(t=0.2, accel=[0.0, 0.1, 9.8], gyro=[0.0, 5.0, 0.0]),
+    ]
+
+    reckoner = DeadReckoner(
+        Quaternion(1, 0, 0, 0), gravity_magnitude=9.8, interpolator=ZeroOrderHoldInterpolator()
+    )
+    states = reckoner.run(samples)
+
+    assert len(states) == len(samples)
+    for state in states:
+        assert abs(state.attitude) == pytest.approx(1.0)
+        assert np.all(np.isfinite(state.position))
+        assert np.all(np.isfinite(state.velocity))
 
 
 # --- Independent reference implementation, used only to regression-test
