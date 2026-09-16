@@ -1,8 +1,13 @@
+import csv
 import re
 import sqlite3
+import time
 from multiprocessing import Queue
 from typing import List
+
+from .io import imu_sample_from_row
 from .runners import Runner, TerminateSignal
+from .samples import ImuSample
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -66,6 +71,73 @@ class FromCSV(IngestConnector):
                 self.output_stream.put(row)
 
         print("Completed reading CSV file")
+        self.output_stream.put(TerminateSignal(True, None))
+
+        return True
+
+
+class LiveCSVReplay(IngestConnector):
+    """
+    Simulates a live IMU feed by replaying a CSV file (in the format read by
+    :func:`deadrec.io.read_imu_csv`) as a stream of
+    :class:`deadrec.samples.ImuSample`, paced to real wall-clock time
+    according to each sample's own timestamp - there's no real phone to
+    stream from yet, so this is how the streaming pipeline is proven to
+    keep up with real-time sample arrival rather than just being fast in
+    isolation.
+
+    """
+
+    def __init__(
+        self,
+        path: str,
+        *,
+        time_divisor: float = 1.0,
+        speed: float = 1.0,
+        sleep_fn=time.sleep,
+    ):
+        """
+        Args:
+            * path {``str``} -- Path to the CSV file to replay.
+            * time_divisor {``float``} -- Every sample's timestamp is
+              divided by this before use - e.g. 1000 if the file's
+              timestamps are in milliseconds (as in
+              ``example_data/Example_data.csv``). Must match whatever
+              divisor the reconstruction downstream uses, since this same
+              (divided) timestamp is what pacing is computed from - the
+              pacing and the kinematics must agree on time units. Defaults
+              to 1 (no conversion).
+            * speed {``float``} -- Replay speed multiplier: 1.0 (the
+              default) paces samples at real wall-clock time, higher values
+              replay faster.
+            * sleep_fn -- Called with the number of seconds to wait between
+              consecutive samples. Defaults to :func:`time.sleep`; tests can
+              inject a fake to assert computed durations without waiting.
+
+        """
+        self.path = path
+        self.time_divisor = time_divisor
+        self.speed = speed
+        self.sleep_fn = sleep_fn
+        super().__init__()
+
+    def run(self):
+        prev_t = None
+
+        with open(self.path, newline="") as csv_file:
+            for row in csv.DictReader(csv_file):
+                sample = imu_sample_from_row(row)
+                sample = ImuSample(
+                    t=sample.t / self.time_divisor, accel=sample.accel, gyro=sample.gyro
+                )
+
+                if prev_t is not None:
+                    self.sleep_fn(max(0.0, (sample.t - prev_t) / self.speed))
+                prev_t = sample.t
+
+                self.output_stream.put(sample)
+
+        print("Completed live CSV replay")
         self.output_stream.put(TerminateSignal(True, None))
 
         return True
