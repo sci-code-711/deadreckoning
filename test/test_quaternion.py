@@ -171,3 +171,46 @@ def test_quaternion_from_euler_angles():
     assert Quaternion.from_eul_angles(np.pi / np.sqrt(2), np.pi / np.sqrt(2), 0) == Quaternion(
         pytest.approx(-1), pytest.approx(0), pytest.approx(0), 0
     )
+
+
+def test_quaternion_from_axis_angle_zero_angle_is_identity():
+    assert Quaternion.from_axis_angle([0, 0, 1], 0) == Quaternion(1, 0, 0, 0)
+
+
+def test_quaternion_from_axis_angle_zero_axis_is_identity():
+    assert Quaternion.from_axis_angle([0, 0, 0], np.pi / 2) == Quaternion(1, 0, 0, 0)
+
+
+def test_quaternion_from_axis_angle_matches_from_eul_angles_single_axis():
+    assert Quaternion.from_axis_angle([1, 0, 0], np.pi / 2) == Quaternion(
+        pytest.approx(np.cos(np.pi / 4)), pytest.approx(np.sin(np.pi / 4)), 0, 0
+    )
+    assert Quaternion.from_axis_angle([0, 1, 0], np.pi / 2) == Quaternion(
+        pytest.approx(np.cos(np.pi / 4)), 0, pytest.approx(np.sin(np.pi / 4)), 0
+    )
+    assert Quaternion.from_axis_angle([0, 0, 1], np.pi / 2) == Quaternion(
+        pytest.approx(np.cos(np.pi / 4)), 0, 0, pytest.approx(np.sin(np.pi / 4))
+    )
+
+
+def test_quaternion_from_axis_angle_normalises_non_unit_axis():
+    result = Quaternion.from_axis_angle([0, 0, 5], np.pi / 2)
+
+    assert abs(result) == pytest.approx(1.0)
+    assert result == Quaternion(
+        pytest.approx(np.cos(np.pi / 4)), 0, 0, pytest.approx(np.sin(np.pi / 4))
+    )
+
+
+def test_quaternion_from_axis_angle_composes_via_multiplication():
+    # Two successive rotations by angle/2 about the same axis should equal
+    # one rotation by angle.
+    axis = [1.0, 2.0, -1.0]
+    half = Quaternion.from_axis_angle(axis, np.pi / 3)
+    full = Quaternion.from_axis_angle(axis, 2 * np.pi / 3)
+    composed = half * half
+
+    assert composed.w == pytest.approx(full.w)
+    assert composed.x == pytest.approx(full.x)
+    assert composed.y == pytest.approx(full.y)
+    assert composed.z == pytest.approx(full.z)
