@@ -64,11 +64,10 @@ class DeadReckoner:
           origin; pass the real position when it's known.
         * interpolator {``AngularRateInterpolator``} -- Strategy used to
           turn gyro readings into a continuous angular-rate function for
-          each step. Defaults to :class:`~deadrec.interpolation.TwoPointLinearInterpolator`,
-          reproducing this class's original hardcoded behavior. Must be
-          causal (see :attr:`~deadrec.interpolation.AngularRateInterpolator.causal`) -
-          use :class:`~deadrec.ekf.WindowedGravityCorrectedEKF` for a
-          non-causal one.
+          each step. Defaults to :class:`~deadrec.interpolation.TwoPointLinearInterpolator`.
+          Must not need look-ahead samples (see
+          :attr:`~deadrec.interpolation.AngularRateInterpolator.needs_lookahead`) -
+          use :class:`~deadrec.ekf.WindowedGravityCorrectedEKF` for one that does.
         * integrator {``AttitudeIntegrator``} -- Strategy used to integrate
           attitude across each step given the interpolator's angular-rate
           function. Defaults to :class:`~deadrec.attitude_integration.RK4Integrator`.
@@ -111,13 +110,12 @@ class DeadReckoner:
               interpolator to check.
 
         """
-        if not interpolator.causal:
+        if interpolator.needs_lookahead:
             raise ValueError(
-                f"{type(interpolator).__name__} is not causal (it needs "
-                f"look-ahead samples), so it can't be used with {type(self).__name__}, "
-                "which processes samples one at a time as they arrive. Use "
-                "WindowedGravityCorrectedEKF instead, which holds the full "
-                "sample sequence up front."
+                f"{type(interpolator).__name__} needs look-ahead samples, so it "
+                f"can't be used with {type(self).__name__}, which processes samples "
+                "one at a time as they arrive. Use WindowedGravityCorrectedEKF "
+                "instead, which holds the full sample sequence up front."
             )
 
     def step(self, sample: ImuSample) -> TrajectoryState:
