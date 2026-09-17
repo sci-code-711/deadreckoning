@@ -167,6 +167,11 @@ class ToCSV(OutputConnector):
             while True:
                 item = self.input_stream.get()
                 if isinstance(item, TerminateSignal):
+                    # .get() returns None for a clean stop, or raises the
+                    # original exception for a failure - either way this
+                    # stops the loop without writing further rows; the
+                    # `with` block still closes the file on the way out.
+                    item.get()
                     break
 
                 parsed_row = self.delimiter.join(item)
@@ -206,6 +211,9 @@ class ToSQLite(OutputConnector):
             while True:
                 item = self.input_stream.get()
                 if isinstance(item, TerminateSignal):
+                    if not item.success:
+                        connection.rollback()
+                    item.get()
                     break
 
                 connection.execute(insert_sql, tuple(item))

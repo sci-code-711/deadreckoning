@@ -119,6 +119,20 @@ def test_to_csv_omits_header_by_default(tmp_path):
     assert out_path.read_text() == "0,1,2\n"
 
 
+def test_to_csv_raises_on_failure_terminate_signal(tmp_path):
+    out_path = tmp_path / "out.csv"
+    connector = ToCSV(str(out_path))
+    connector.input_stream.put(["1", "2"])
+    connector.input_stream.put(TerminateSignal(False, ValueError("boom")))
+
+    with pytest.raises(ValueError, match="boom"):
+        connector.run()
+
+    # Rows already written before the failure arrived are kept, and the
+    # file is still cleanly closed rather than left open/corrupted.
+    assert out_path.read_text() == "1,2\n"
+
+
 def test_to_sqlite_writes_rows(tmp_path):
     db_path = tmp_path / "output.db"
     connector = ToSQLite(str(db_path), "readings", ["timestamp", "value"])
@@ -169,6 +183,22 @@ def test_to_sqlite_appends_to_existing_table(tmp_path):
     connection.close()
 
     assert rows == [("1",), ("2",)]
+
+
+def test_to_sqlite_rolls_back_on_failure_terminate_signal(tmp_path):
+    db_path = tmp_path / "output.db"
+    connector = ToSQLite(str(db_path), "readings", ["a"])
+    connector.input_stream.put(["1"])
+    connector.input_stream.put(TerminateSignal(False, ValueError("boom")))
+
+    with pytest.raises(ValueError, match="boom"):
+        connector.run()
+
+    connection = sqlite3.connect(db_path)
+    rows = connection.execute("SELECT a FROM readings").fetchall()
+    connection.close()
+
+    assert rows == []
 
 
 @pytest.mark.parametrize("bad_name", ["bad name", "1table", "table;DROP TABLE x", ""])

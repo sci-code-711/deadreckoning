@@ -3,6 +3,12 @@ from .transformers import TransformerBase
 from typing import List
 
 
+class PipelineError(RuntimeError):
+    """Raised by Core.terminate() when a connector or transformer process
+    exited with a non-zero exit code, so a pipeline failure is visible to
+    the caller instead of being silently swallowed."""
+
+
 class DefaultTransformer(TransformerBase):
     def transformation(self, item):
         return item
@@ -37,3 +43,16 @@ class Core:
         self.i_connector.join(timeout)
         self.transformer_instance.join(timeout)
         self.o_connector.join(timeout)
+
+        failures = [
+            (name, process.exitcode)
+            for name, process in (
+                ("input connector", self.i_connector),
+                ("transformer", self.transformer_instance),
+                ("output connector", self.o_connector),
+            )
+            if process.exitcode not in (None, 0)
+        ]
+        if failures:
+            summary = ", ".join(f"{name} exited with code {code}" for name, code in failures)
+            raise PipelineError(f"Pipeline {self.name!r} failed: {summary}")
