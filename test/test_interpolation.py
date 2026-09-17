@@ -86,12 +86,12 @@ def test_build_works_mid_window_with_extra_context_samples(cls):
     assert np.allclose(omega(window[1].t), np.radians(window[1].gyro))
 
 
-def test_centred_cubic_hermite_is_non_causal():
+def test_centred_cubic_hermite_needs_lookahead():
     interp = CentredCubicHermiteInterpolator()
 
     assert interp.context_before == 1
     assert interp.context_after == 1
-    assert interp.causal is False
+    assert interp.needs_lookahead is True
 
 
 def _hermite_window():
