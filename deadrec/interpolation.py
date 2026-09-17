@@ -26,8 +26,8 @@ class AngularRateInterpolator(ABC):
           needs, beyond the step's own start sample. Defaults to ``0``.
         * context_after {``int``} -- Extra future samples :meth:`build`
           needs, beyond the step's own end sample. Defaults to ``0``;
-          ``> 0`` means the interpolator is non-causal ("windowed") and
-          needs samples that haven't happened yet relative to the step.
+          ``> 0`` means the interpolator needs samples that haven't
+          happened yet relative to the step.
 
     """
 
@@ -35,17 +35,18 @@ class AngularRateInterpolator(ABC):
     context_after: int = 0
 
     @property
-    def causal(self) -> bool:
+    def needs_lookahead(self) -> bool:
         """
-        Whether this interpolator only needs samples up to and including
-        the step's end sample - and so can be used by a streaming reckoner
-        that processes one sample at a time.
+        Whether this interpolator needs samples that haven't happened yet
+        relative to the step's end sample, and so can only be used by a
+        batch reckoner that holds the full sample sequence up front, not a
+        streaming reckoner that processes one sample at a time.
 
         Returns:
-            * {``bool``} -- ``True`` iff ``context_after == 0``.
+            * {``bool``} -- ``True`` iff ``context_after > 0``.
 
         """
-        return self.context_after == 0
+        return self.context_after > 0
 
     @abstractmethod
     def build(self, window: Sequence[ImuSample], step_pos: int) -> Callable[[float], np.ndarray]:
@@ -70,10 +71,7 @@ class AngularRateInterpolator(ABC):
 
 
 class TwoPointLinearInterpolator(AngularRateInterpolator):
-    """
-    Linearly blends the step's two endpoint gyro readings. Causal, and
-    reproduces this package's original hardcoded behavior exactly.
-    """
+    """Linearly blends the step's two endpoint gyro readings."""
 
     def build(self, window: Sequence[ImuSample], step_pos: int) -> Callable[[float], np.ndarray]:
         start, end = window[step_pos - 1], window[step_pos]

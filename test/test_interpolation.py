@@ -15,12 +15,12 @@ def _window():
     ]
 
 
-def test_two_point_linear_is_causal_with_no_extra_context():
+def test_two_point_linear_does_not_need_lookahead():
     interp = TwoPointLinearInterpolator()
 
     assert interp.context_before == 0
     assert interp.context_after == 0
-    assert interp.causal is True
+    assert interp.needs_lookahead is False
 
 
 def test_two_point_linear_endpoints_match_converted_gyro_readings():
@@ -46,12 +46,12 @@ def test_two_point_linear_blend_is_exact():
     assert np.allclose(omega(t), w0 + frac * (w1 - w0))
 
 
-def test_zero_order_hold_is_causal_with_no_extra_context():
+def test_zero_order_hold_does_not_need_lookahead():
     interp = ZeroOrderHoldInterpolator()
 
     assert interp.context_before == 0
     assert interp.context_after == 0
-    assert interp.causal is True
+    assert interp.needs_lookahead is False
 
 
 def test_zero_order_hold_endpoint_matches_converted_gyro_reading():
