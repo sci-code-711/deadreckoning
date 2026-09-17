@@ -24,7 +24,16 @@ class TransformerBase(Runner, ABC):
                 break
 
             count += 1
-            self.o_stream.put(self.transformation(item))
+            try:
+                result = self.transformation(item)
+            except Exception as exc:
+                # Forward the failure downstream before dying, so an output
+                # connector blocked on i_stream.get() doesn't wait forever
+                # for a TerminateSignal that would otherwise never come.
+                self.o_stream.put(TerminateSignal(False, exc))
+                raise
+
+            self.o_stream.put(result)
 
         print(f"Transformer has finished processing {count} items")
 

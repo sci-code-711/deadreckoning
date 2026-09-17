@@ -8,8 +8,9 @@ from deadrec.dead_reckoning import DeadReckoner
 from deadrec.ekf import GravityCorrectedEKF
 from deadrec.io import trajectory_state_to_row
 from deadrec.quaternion import Quaternion
+from deadrec.runners import TerminateSignal
 from deadrec.samples import ImuSample
-from deadrec.transformers import ReconstructionTransformer
+from deadrec.transformers import ReconstructionTransformer, TransformerBase
 
 
 class _FakeLogger:
@@ -194,3 +195,23 @@ def test_transformation_logs_and_reraises_on_exception():
         transformer.transformation(ImuSample(t=0.0, accel=[0, 0, 1], gyro=[0, 0, 0]))
 
     assert len(transformer.logger.exceptions) == 1
+
+
+def test_transformer_base_forwards_failure_as_terminate_signal_before_dying():
+    class FailingTransformer(TransformerBase):
+        def transformation(self, item):
+            raise ValueError("boom")
+
+    i_stream = Queue()
+    o_stream = Queue()
+    i_stream.put("item")
+    transformer = FailingTransformer(i_stream, o_stream)
+
+    with pytest.raises(ValueError, match="boom"):
+        transformer.run()
+
+    signal = o_stream.get()
+    assert isinstance(signal, TerminateSignal)
+    assert signal.success is False
+    with pytest.raises(ValueError, match="boom"):
+        signal.get()
