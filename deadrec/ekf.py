@@ -3,8 +3,9 @@
 import numpy as np
 
 from .attitude import attitude_aligning_vectors, gravity_deviation
+from .attitude_integration import AttitudeIntegrator, RK4Integrator
 from .dead_reckoning import DeadReckoner, accel_to_nav_frame
-from .kinematics import rk4_attitude_step
+from .interpolation import AngularRateInterpolator, TwoPointLinearInterpolator
 from .quaternion import Quaternion
 from .samples import ImuSample, TrajectoryState
 
@@ -71,6 +72,7 @@ class GravityCorrectedEKF(DeadReckoner):
         * beta {``float``} -- Weight given to the gravity-derived attitude
           when blending it with the predicted attitude (0 = ignore it
           entirely, 1 = use it exclusively). Defaults to ``0.2``.
+        * interpolator, integrator -- See :class:`DeadReckoner`.
 
     """
 
@@ -84,6 +86,8 @@ class GravityCorrectedEKF(DeadReckoner):
         initial_position=(0.0, 0.0, 0.0),
         deviation_threshold: float = 0.02,
         beta: float = 0.2,
+        interpolator: AngularRateInterpolator = TwoPointLinearInterpolator(),
+        integrator: AttitudeIntegrator = RK4Integrator(),
     ):
         super().__init__(
             initial_attitude,
@@ -91,6 +95,8 @@ class GravityCorrectedEKF(DeadReckoner):
             gravity_direction=gravity_direction,
             initial_velocity=initial_velocity,
             initial_position=initial_position,
+            interpolator=interpolator,
+            integrator=integrator,
         )
         self.deviation_threshold = deviation_threshold
         self.beta = beta
@@ -134,6 +140,10 @@ class WindowedGravityCorrectedEKF(GravityCorrectedEKF):
           window, not just the current sample. Defaults to ``0.035``.
         * window_radius {``int``} -- Number of samples either side of the
           current one to include in the window. Defaults to ``5``.
+        * interpolator, integrator -- See :class:`DeadReckoner`. Unlike
+          :class:`DeadReckoner`/:class:`GravityCorrectedEKF`, a non-causal
+          interpolator (one needing look-ahead samples) is accepted here,
+          since :meth:`run` always holds the full sample sequence up front.
 
     """
 
@@ -148,6 +158,8 @@ class WindowedGravityCorrectedEKF(GravityCorrectedEKF):
         deviation_threshold: float = 0.035,
         beta: float = 0.2,
         window_radius: int = 5,
+        interpolator: AngularRateInterpolator = TwoPointLinearInterpolator(),
+        integrator: AttitudeIntegrator = RK4Integrator(),
     ):
         super().__init__(
             initial_attitude,
@@ -157,8 +169,18 @@ class WindowedGravityCorrectedEKF(GravityCorrectedEKF):
             initial_position=initial_position,
             deviation_threshold=deviation_threshold,
             beta=beta,
+            interpolator=interpolator,
+            integrator=integrator,
         )
         self.window_radius = window_radius
+
+    def _check_interpolator_compatibility(self, interpolator: AngularRateInterpolator) -> None:
+        """
+        No-op: unlike :class:`DeadReckoner`/:class:`GravityCorrectedEKF`,
+        this class always holds the full sample sequence up front (see
+        :meth:`run`), so a non-causal interpolator's look-ahead is always
+        available.
+        """
 
     def step(self, sample: ImuSample) -> TrajectoryState:
         raise NotImplementedError(
@@ -184,8 +206,9 @@ class WindowedGravityCorrectedEKF(GravityCorrectedEKF):
 
             predicted_attitude, predicted_accel_nav = None, None
             for row in range(r, rmax):
-                q_pred = rk4_attitude_step(
-                    prev_attitude, samples[row - 1].gyro, samples[row].gyro, dt
+                omega_fn = self.interpolator.build(samples, row)
+                q_pred = self.integrator.integrate(
+                    prev_attitude, omega_fn, samples[row - 1].t, samples[row - 1].t + dt
                 )
                 accel_nav_pred = accel_to_nav_frame(
                     samples[row].accel, q_pred, self.gravity_magnitude, self.gravity_direction
