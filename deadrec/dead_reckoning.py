@@ -1,8 +1,11 @@
 """Trajectory reconstruction by direct integration of IMU measurements."""
 
+from collections import deque
+
 import numpy as np
 
-from .kinematics import rk4_attitude_step
+from .attitude_integration import AttitudeIntegrator, RK4Integrator
+from .interpolation import AngularRateInterpolator, TwoPointLinearInterpolator
 from .quaternion import Quaternion
 from .samples import ImuSample, TrajectoryState
 
@@ -59,6 +62,15 @@ class DeadReckoner:
         * initial_position {``array-like``} -- Position at the first sample.
           Defaults to ``(0, 0, 0)``, i.e. treating the first sample as the
           origin; pass the real position when it's known.
+        * interpolator {``AngularRateInterpolator``} -- Strategy used to
+          turn gyro readings into a continuous angular-rate function for
+          each step. Defaults to :class:`~deadrec.interpolation.TwoPointLinearInterpolator`.
+          Must not need look-ahead samples (see
+          :attr:`~deadrec.interpolation.AngularRateInterpolator.needs_lookahead`) -
+          use :class:`~deadrec.ekf.WindowedGravityCorrectedEKF` for one that does.
+        * integrator {``AttitudeIntegrator``} -- Strategy used to integrate
+          attitude across each step given the interpolator's angular-rate
+          function. Defaults to :class:`~deadrec.attitude_integration.RK4Integrator`.
 
     """
 
@@ -70,14 +82,41 @@ class DeadReckoner:
         gravity_direction=(0, 0, 1),
         initial_velocity=(0.0, 0.0, 0.0),
         initial_position=(0.0, 0.0, 0.0),
+        interpolator: AngularRateInterpolator = TwoPointLinearInterpolator(),
+        integrator: AttitudeIntegrator = RK4Integrator(),
     ):
         self.attitude = initial_attitude
         self.gravity_magnitude = gravity_magnitude
         self.gravity_direction = gravity_direction
         self.initial_velocity = np.asarray(initial_velocity, dtype=float)
         self.initial_position = np.asarray(initial_position, dtype=float)
-        self._prev_sample: ImuSample | None = None
+        self.interpolator = interpolator
+        self.integrator = integrator
+        self._check_interpolator_compatibility(self.interpolator)
+        self._history: deque[ImuSample] = deque(maxlen=self.interpolator.context_before + 1)
         self._prev_state: TrajectoryState | None = None
+
+    def _check_interpolator_compatibility(self, interpolator: AngularRateInterpolator) -> None:
+        """
+        Reject an interpolator that needs look-ahead samples this streaming
+        reckoner can't provide.
+
+        Subclasses that always hold the full sample sequence up front
+        (i.e. :class:`~deadrec.ekf.WindowedGravityCorrectedEKF`) override
+        this to a no-op.
+
+        Args:
+            * interpolator {``AngularRateInterpolator``} -- The
+              interpolator to check.
+
+        """
+        if interpolator.needs_lookahead:
+            raise ValueError(
+                f"{type(interpolator).__name__} needs look-ahead samples, so it "
+                f"can't be used with {type(self).__name__}, which processes samples "
+                "one at a time as they arrive. Use WindowedGravityCorrectedEKF "
+                "instead, which holds the full sample sequence up front."
+            )
 
     def step(self, sample: ImuSample) -> TrajectoryState:
         """
@@ -111,7 +150,7 @@ class DeadReckoner:
             )
         else:
             prev = self._prev_state
-            dt = sample.t - self._prev_sample.t
+            dt = sample.t - self._history[-1].t
 
             self.attitude = self._predict_attitude(sample, dt)
             accel_nav = accel_to_nav_frame(
@@ -130,7 +169,7 @@ class DeadReckoner:
                 euler=self.attitude.to_euler_angles(),
             )
 
-        self._prev_sample = sample
+        self._history.append(sample)
         self._prev_state = state
 
         return state
@@ -140,19 +179,23 @@ class DeadReckoner:
         Propagate attitude to ``sample`` using gyroscope readings.
 
         Subclasses that fuse in other sensors (e.g. a gravity-vector
-        correction) can override this to adjust the RK4 prediction before
-        it's used to rotate acceleration into the navigation frame.
+        correction) can override this to adjust the prediction before it's
+        used to rotate acceleration into the navigation frame.
 
         Args:
             * sample {``ImuSample``} -- The IMU reading being processed.
-              ``self._prev_sample`` is the previous one.
-            * dt {``float``} -- Time step since ``self._prev_sample`` (s).
+              ``self._history[-1]`` is the previous one.
+            * dt {``float``} -- Time step since ``self._history[-1]`` (s).
 
         Returns:
             * {``Quaternion``} -- The predicted attitude at ``sample.t``.
 
         """
-        return rk4_attitude_step(self.attitude, self._prev_sample.gyro, sample.gyro, dt)
+        window = list(self._history) + [sample]
+        step_pos = len(self._history)
+        omega_fn = self.interpolator.build(window, step_pos)
+
+        return self.integrator.integrate(self.attitude, omega_fn, self._history[-1].t, sample.t)
 
     def run(self, samples) -> list[TrajectoryState]:
         """
