@@ -11,12 +11,18 @@ from multiprocessing import Queue
 import numpy as np
 
 from .attitude import estimate_gravity_magnitude, initial_attitude_from_gravity
+from .attitude_integration import RK4Integrator
 from .calibration import CalibrationCoefficients, apply_calibration
 from .connectors import LiveCSVReplay, ToCSV
 from .core import Core
 from .dead_reckoning import DeadReckoner
 from .ekf import GravityCorrectedEKF, WindowedGravityCorrectedEKF
 from .filtering import moving_average_filter
+from .interpolation import (
+    CentredCubicHermiteInterpolator,
+    TwoPointLinearInterpolator,
+    ZeroOrderHoldInterpolator,
+)
 from .io import _TRAJECTORY_COLUMNS, read_imu_csv, write_trajectory_csv
 from .logger import QueueLogListener
 from .samples import ImuSample
@@ -26,6 +32,16 @@ _METHODS = {
     "simple": DeadReckoner,
     "ekf": GravityCorrectedEKF,
     "ekf-fut": WindowedGravityCorrectedEKF,
+}
+
+_INTERPOLATORS = {
+    "linear": TwoPointLinearInterpolator,
+    "zoh": ZeroOrderHoldInterpolator,
+    "cubic-hermite": CentredCubicHermiteInterpolator,
+}
+
+_INTEGRATORS = {
+    "rk4": RK4Integrator,
 }
 
 
@@ -107,6 +123,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Look-ahead/behind window radius for --method ekf-fut. "
         "Defaults to that method's own default.",
     )
+    run_parser.add_argument(
+        "--interpolator",
+        choices=sorted(_INTERPOLATORS),
+        default="linear",
+        help="Angular-rate interpolation strategy: 'linear' (two-point "
+        "linear blend), 'zoh' (zero-order hold), or 'cubic-hermite' "
+        "(non-causal - only works with --method ekf-fut). Defaults to 'linear'.",
+    )
+    run_parser.add_argument(
+        "--integrator",
+        choices=sorted(_INTEGRATORS),
+        default="rk4",
+        help="Attitude-integration strategy. Defaults to 'rk4'.",
+    )
 
     stream_parser = subparsers.add_parser(
         "stream",
@@ -182,6 +212,22 @@ def _build_parser() -> argparse.ArgumentParser:
         "the method's own default.",
     )
     stream_parser.add_argument(
+        "--interpolator",
+        choices=sorted(_INTERPOLATORS),
+        default="linear",
+        help="Angular-rate interpolation strategy: 'linear' (two-point "
+        "linear blend) or 'zoh' (zero-order hold). 'cubic-hermite' is not "
+        "usable here - it needs a look-ahead window, which --method ekf-fut "
+        "(the only reckoner that provides one) isn't available for "
+        "streaming. Defaults to 'linear'.",
+    )
+    stream_parser.add_argument(
+        "--integrator",
+        choices=sorted(_INTEGRATORS),
+        default="rk4",
+        help="Attitude-integration strategy. Defaults to 'rk4'.",
+    )
+    stream_parser.add_argument(
         "--latency-warning-threshold",
         type=float,
         default=0.5,
@@ -238,6 +284,9 @@ def _build_reckoner(args: argparse.Namespace, initial_attitude, gravity_magnitud
             kwargs["beta"] = args.beta
     if args.method == "ekf-fut" and args.window_radius is not None:
         kwargs["window_radius"] = args.window_radius
+
+    kwargs["interpolator"] = _INTERPOLATORS[args.interpolator]()
+    kwargs["integrator"] = _INTEGRATORS[args.integrator]()
 
     return cls(initial_attitude, gravity_magnitude, **kwargs)
 
@@ -314,10 +363,14 @@ def stream(args: argparse.Namespace) -> None:
 def main(argv=None) -> int:
     args = _build_parser().parse_args(argv)
 
-    if args.command == "run":
-        run(args)
-    elif args.command == "stream":
-        stream(args)
+    try:
+        if args.command == "run":
+            run(args)
+        elif args.command == "stream":
+            stream(args)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
     return 0
 
