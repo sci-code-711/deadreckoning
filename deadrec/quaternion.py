@@ -247,3 +247,30 @@ class Quaternion:
             m / norm * np.sin(norm),
             n / norm * np.sin(norm),
         )
+
+    @classmethod
+    def from_axis_angle(cls, axis, angle: float) -> "Quaternion":
+        """
+        Generate a rotation quaternion representing a rotation of ``angle``
+        radians about ``axis``.
+
+        Args:
+            * axis {``array-like``} -- The 3-vector axis to rotate about.
+              Does not need to be normalised; the zero vector returns the
+              identity quaternion regardless of ``angle``.
+            * angle {``number``} -- The rotation angle, in radians.
+
+        Returns:
+            * {``Quaternion``} -- The rotation quaternion.
+
+        """
+        axis = np.asarray(axis, dtype=float)
+        norm = np.linalg.norm(axis)
+
+        if norm == 0:
+            return cls(1, 0, 0, 0)
+
+        axis = axis / norm
+        half = angle / 2
+
+        return cls(np.cos(half), *(axis * np.sin(half)))
