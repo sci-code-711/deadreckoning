@@ -70,19 +70,23 @@ uv run pytest
 
 ## Ticket workflow
 
-Work in this repo is scoped and tracked as lightweight markdown tickets
-under `tickets/`. Use these skills rather than improvising the workflow:
+Work in this repo is tracked as GitHub issues in
+`sci-code-711/deadreckoning` — tickets are referenced only by their
+GitHub issue number (`#42`), never by an internal id. Use these skills
+rather than improvising the workflow:
 
-- `plan-work` — turns a request, bug report, or idea into one or more
-  scoped tickets *before* any code is written. Use this first for
-  anything nontrivial.
-- `complete-ticket` — verifies a ticket's acceptance criteria and the
-  repo's required checks (`ruff check`, `ruff format --check`, `pytest`)
-  before marking it done. Use this when work on a ticket looks finished.
-- `write-ticket` — subskill that defines the canonical ticket format
-  (frontmatter + Context/Acceptance criteria/Out of scope/Notes). It's
-  invoked by the two skills above to create or update ticket files; you
-  shouldn't normally need to call it directly.
+- `plan-work` — takes a request or idea through requirements gathering,
+  a design/architecture plan (in Claude Code's plan mode, with human
+  approval), and a ticket breakdown (also approved before anything is
+  pushed) to a set of GitHub issues. Use this first for anything
+  nontrivial; it never pushes issues without explicit approval.
+- `complete-ticket` — verifies a GitHub issue's acceptance criteria and
+  the repo's required checks (`ruff check`, `ruff format --check`,
+  `pytest`) before closing it. Use this when work on a ticket looks
+  finished.
+- `write-ticket` — subskill that defines the canonical issue title/body
+  format and drafts or creates the GitHub issue itself. It's invoked by
+  the two skills above; you shouldn't normally need to call it directly.
 
 See `.claude/skills/*/SKILL.md` for the full instructions each skill
 follows.

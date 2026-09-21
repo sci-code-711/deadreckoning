@@ -1,76 +1,58 @@
 ---
 name: write-ticket
-description: Subskill that defines the canonical ticket format for this repo and creates or updates a single ticket file under tickets/. Invoked by the plan-work and complete-ticket skills rather than used standalone, but can also be triggered directly with "write a ticket for X" or "draft a ticket for X".
+description: Subskill that defines the canonical GitHub issue format used as this repo's tickets, and drafts or creates a single issue in sci-code-711/deadreckoning. Invoked by plan-work (to draft, then push, ticket bodies) and complete-ticket (to close an issue with a completion comment) rather than used standalone.
 ---
 
 # Write ticket
 
-Defines the one ticket format used across this repo, so `plan-work` and
-`complete-ticket` produce consistent, readable tickets instead of each
-inventing their own shape.
-
-## Where tickets live
-
-- All tickets are markdown files in `tickets/` at the repo root. Create the
-  directory the first time it's needed — don't scaffold it speculatively.
-- Filename: `NNN-short-slug.md`, where `NNN` is a zero-padded, sequential
-  three-digit id (`001`, `002`, ...) and `short-slug` is a few hyphenated
-  words from the title. The id is one higher than the highest existing
-  ticket id in `tickets/`, or `001` if the directory is empty or missing.
+Tickets in this repo *are* GitHub issues in `sci-code-711/deadreckoning` —
+there is no separate file format. Tickets are referenced only by their
+GitHub issue number (`#42`), never by an internal id.
 
 ## Ticket format
 
-Each ticket is a single markdown file with YAML frontmatter followed by a
-fixed set of sections:
+Title: short, specific summary of the change — same bar as a good commit
+subject.
+
+Body:
 
 ```markdown
----
-id: 003
-title: Short, specific summary of the change
-status: planned
-created: 2026-09-21
----
-
 ## Context
 
-Why this ticket exists and any background needed to act on it without
-re-reading the whole conversation. Link related tickets by filename.
+Why this exists and any background needed to act on it without re-reading
+the planning conversation. Link related issues with `#NN`.
 
 ## Acceptance criteria
 
 - Concrete, checkable conditions for "done" — behavior, not tasks.
-- Prefer things that can be verified by reading a diff or running a check
-  over vague goals.
+- Sized so a human can review the whole issue in one sitting (see
+  plan-work's sizing guidance).
 
 ## Out of scope
 
-Anything adjacent that this ticket deliberately does not cover, so it
-doesn't get silently folded in. Omit this section if there's nothing to
-exclude.
-
-## Notes
-
-Append-only log of what happened: decisions made while implementing,
-follow-ups spun off, and — on completion — a short summary of what changed
-and which files were touched. Omit until there's something to record.
+Anything adjacent this issue deliberately excludes. Omit this section if
+there's nothing to exclude.
 ```
 
-`status` is one of `planned`, `in-progress`, or `done`. Only
-`complete-ticket` moves a ticket to `done`; only move it earlier
-(`planned` → `in-progress`) when work on it actually starts.
+## Drafting vs. pushing
 
-## What this skill does
+This skill has two distinct calls, and callers must say which they want:
 
-Given a ticket's content (from `plan-work`) or a status change plus a
-completion note (from `complete-ticket`):
+- **Draft only** — produce the title + body text above for review. Do
+  NOT call `mcp__github__issue_write` yet. This is what `plan-work` uses
+  before human approval.
+- **Push** — after a draft has been explicitly approved, create it with
+  `mcp__github__issue_write` (`method: "create"`, `owner: "sci-code-711"`,
+  `repo: "deadreckoning"`). Report back the resulting issue number and
+  URL — that number is now the ticket's only identifier.
 
-1. Determine the next ticket id by scanning `tickets/` for the highest
-   existing `NNN` prefix, if creating a new ticket.
-2. Write or update the file in the format above. Keep acceptance criteria
-   specific enough that `complete-ticket` can check them against a diff
-   without guessing at intent.
-3. Report the ticket's filename back to the caller.
+Never push a ticket that wasn't shown to the user in draft form first.
 
-Keep tickets small enough to fit the format above without padding — if the
-content doesn't fit in a few sentences per section, it's probably more than
-one ticket (send it back to `plan-work` to split).
+## Updating an existing ticket
+
+To record progress or completion on an existing issue (e.g. from
+`complete-ticket`), use `mcp__github__add_issue_comment` for a log entry
+and `mcp__github__issue_write` with `method: "update"` for state changes
+(e.g. closing it). Don't rewrite a ticket's Context/Acceptance criteria
+after the fact — append comments instead, so the issue's history stays
+honest.
