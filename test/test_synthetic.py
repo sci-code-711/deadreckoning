@@ -3,7 +3,7 @@ import pytest
 
 from deadrec.dead_reckoning import accel_to_nav_frame
 from deadrec.quaternion import Quaternion
-from deadrec.synthetic import MotionSegment, SyntheticTrajectory
+from deadrec.synthetic import CoordinatedTurnSegment, MotionSegment, SyntheticTrajectory
 
 _G = 9.80665
 
@@ -224,3 +224,137 @@ def test_sample_at_rate_rejects_non_positive_hz():
         trajectory.sample_at_rate(0)
     with pytest.raises(ValueError):
         trajectory.sample_at_rate(-5)
+
+
+# --- CoordinatedTurnSegment (circular motion) ---
+
+
+def _numerically_integrate_turn(duration, turn_rate_deg, velocity0, position0, dt=1e-5):
+    # Independent cross-check: dv/dt = omega x v for rotation about z,
+    # rather than the closed-form trig solution CoordinatedTurnSegment uses.
+    omega = np.radians(turn_rate_deg)
+    velocity = np.asarray(velocity0, dtype=float)
+    position = np.asarray(position0, dtype=float)
+    n_steps = int(round(duration / dt))
+
+    for _ in range(n_steps):
+        vx, vy, vz = velocity
+        accel = np.array([-vy * omega, vx * omega, 0.0])
+        position = position + velocity * dt + 0.5 * accel * dt**2
+        velocity = velocity + accel * dt
+
+    return velocity, position
+
+
+def test_coordinated_turn_rejects_non_positive_duration():
+    with pytest.raises(ValueError):
+        CoordinatedTurnSegment(duration=0, turn_rate_deg=10)
+    with pytest.raises(ValueError):
+        CoordinatedTurnSegment(duration=-1, turn_rate_deg=10)
+
+
+def test_coordinated_turn_matches_independent_numerical_integration():
+    initial_velocity = [5.0, 0.0, 0.0]
+    turn_rate_deg = 20.0
+    duration = 3.0
+
+    trajectory = SyntheticTrajectory(
+        [CoordinatedTurnSegment(duration=duration, turn_rate_deg=turn_rate_deg)],
+        initial_velocity=initial_velocity,
+        gravity_magnitude=_G,
+    )
+
+    final_state = trajectory.state_at(duration)
+    ref_velocity, ref_position = _numerically_integrate_turn(
+        duration, turn_rate_deg, initial_velocity, [0.0, 0.0, 0.0]
+    )
+
+    assert np.allclose(final_state.velocity, ref_velocity, atol=1e-6)
+    assert np.allclose(final_state.position, ref_position, atol=1e-6)
+
+
+def test_coordinated_turn_holds_constant_speed():
+    trajectory = SyntheticTrajectory(
+        [CoordinatedTurnSegment(duration=5.0, turn_rate_deg=15.0)],
+        initial_velocity=[3.0, 4.0, 0.0],
+        gravity_magnitude=_G,
+    )
+    speed0 = np.hypot(3.0, 4.0)
+
+    for t in [0.0, 1.0, 2.5, 5.0]:
+        state = trajectory.state_at(t)
+        assert np.hypot(state.velocity[0], state.velocity[1]) == pytest.approx(speed0)
+        assert state.velocity[2] == pytest.approx(0.0)
+
+
+def test_coordinated_turn_position_stays_on_circle():
+    speed = 5.0
+    turn_rate_deg = 30.0
+    trajectory = SyntheticTrajectory(
+        [CoordinatedTurnSegment(duration=6.0, turn_rate_deg=turn_rate_deg)],
+        initial_velocity=[speed, 0.0, 0.0],
+        gravity_magnitude=_G,
+    )
+    radius = speed / np.radians(turn_rate_deg)
+    center = np.array([0.0, radius, 0.0])
+
+    for t in [0.0, 1.0, 3.0, 6.0]:
+        state = trajectory.state_at(t)
+        assert np.linalg.norm(state.position - center) == pytest.approx(radius, abs=1e-9)
+
+
+def test_coordinated_turn_attitude_tracks_heading_when_aligned():
+    speed = 4.0
+    turn_rate_deg = 25.0
+    trajectory = SyntheticTrajectory(
+        [CoordinatedTurnSegment(duration=4.0, turn_rate_deg=turn_rate_deg)],
+        initial_velocity=[speed, 0.0, 0.0],
+        gravity_magnitude=_G,
+    )
+
+    for t in [0.0, 1.0, 2.0, 4.0]:
+        state = trajectory.state_at(t)
+        forward_quat = state.attitude * Quaternion(0, 1, 0, 0) * state.attitude.conjugate()
+        forward = np.array([forward_quat.x, forward_quat.y, forward_quat.z])
+        velocity_dir = state.velocity / np.linalg.norm(state.velocity)
+        assert np.allclose(forward, velocity_dir, atol=1e-9)
+
+
+def test_coordinated_turn_zero_rate_is_straight_line():
+    trajectory = SyntheticTrajectory(
+        [CoordinatedTurnSegment(duration=2.0, turn_rate_deg=0.0)],
+        initial_velocity=[2.0, -1.0, 0.5],
+        gravity_magnitude=_G,
+    )
+
+    state = trajectory.state_at(2.0)
+    assert np.allclose(state.velocity, [2.0, -1.0, 0.5])
+    assert np.allclose(state.position, [4.0, -2.0, 1.0])
+    assert np.allclose(state.accel_nav, [0, 0, 0])
+
+
+def test_coordinated_turn_zero_initial_speed_stays_put():
+    trajectory = SyntheticTrajectory(
+        [CoordinatedTurnSegment(duration=2.0, turn_rate_deg=45.0)], gravity_magnitude=_G
+    )
+
+    state = trajectory.state_at(2.0)
+    assert np.allclose(state.velocity, [0, 0, 0])
+    assert np.allclose(state.position, [0, 0, 0])
+
+
+def test_coordinated_turn_chains_after_acceleration_segment():
+    trajectory = SyntheticTrajectory(
+        [
+            MotionSegment(duration=2.0, accel_nav=[1.0, 0.0, 0.0]),
+            CoordinatedTurnSegment(duration=3.0, turn_rate_deg=20.0),
+        ],
+        gravity_magnitude=_G,
+    )
+
+    boundary_state = trajectory.state_at(2.0)
+    # Speed after 2s of accel=1 m/s^2 starting from rest: v=2 m/s along +x.
+    assert np.allclose(boundary_state.velocity, [2.0, 0.0, 0.0])
+
+    later_state = trajectory.state_at(3.5)
+    assert np.hypot(later_state.velocity[0], later_state.velocity[1]) == pytest.approx(2.0)
