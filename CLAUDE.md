@@ -80,13 +80,16 @@ rather than improvising the workflow:
   approval), and a ticket breakdown (also approved before anything is
   pushed) to a set of GitHub issues. Use this first for anything
   nontrivial; it never pushes issues without explicit approval.
-- `complete-ticket` — verifies a GitHub issue's acceptance criteria and
-  the repo's required checks (`ruff check`, `ruff format --check`,
-  `pytest`) before closing it. Use this when work on a ticket looks
-  finished.
+- `do-ticket` — picks an unblocked ticket (with the user's say), plans
+  its implementation with an approval gate, implements it, verifies it
+  (`ruff check`, `ruff format --check`, `pytest`, plus a docs check), and
+  opens and watches a PR through to merge (which closes the ticket). Use
+  this to actually work a ticket.
 - `write-ticket` — subskill that defines the canonical issue title/body
-  format and drafts or creates the GitHub issue itself. It's invoked by
-  the two skills above; you shouldn't normally need to call it directly.
+  format (including the `Depends on:` line `do-ticket` uses to find
+  unblocked tickets) and drafts or creates the GitHub issue itself. It's
+  invoked by the two skills above; you shouldn't normally need to call it
+  directly.
 
 See `.claude/skills/*/SKILL.md` for the full instructions each skill
 follows.

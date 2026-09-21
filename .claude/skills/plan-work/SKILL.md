@@ -30,17 +30,21 @@ expensive to redo than the last.
    rather than proceeding on a design that wasn't actually approved.
 5. **Plan the breakdown.** Call `EnterPlanMode` again. Split the approved
    design into tickets sized so a human can review each one fully in one
-   sitting — prefer more small issues over a few large ones. Note
-   dependencies/sequencing between them. For each ticket, invoke
-   `write-ticket` in **draft-only** mode to produce title + body text —
-   don't create anything on GitHub yet.
+   sitting — prefer more small issues over a few large ones. Work out
+   dependencies/sequencing between them and carry that into each draft's
+   required `Depends on:` line (see `write-ticket`'s ticket format) — this
+   is what lets `do-ticket` later find which tickets are actually
+   startable. For each ticket, invoke `write-ticket` in **draft-only**
+   mode to produce title + body text — don't create anything on GitHub
+   yet.
 6. **Review and approval (drafts).** Call `ExitPlanMode` again, showing
    every drafted ticket's title and body. This is a separate approval
    from step 4 — a good design can still get sliced into bad tickets.
 7. **Push to GitHub.** Only after step 6's approval, invoke `write-ticket`
    in **push** mode for each approved draft. Report back the resulting
    issue numbers — those numbers are how this work gets referenced from
-   here on, never an internal id.
+   here on, never an internal id. Actually implementing any of them is a
+   separate step, done via `do-ticket`, not part of this skill.
 
 ## Sizing rule
 
