@@ -1,0 +1,80 @@
+<svg viewBox="0 0 640 390" xmlns="http://www.w3.org/2000/svg" role="img"
+     aria-label="The step from p0 to p1 with short tangent lines drawn at each endpoint, the resulting cubic Hermite curve between them, and the plain straight line for comparison.">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --ink: #1a1a1a;
+      --muted: #6b6b6b;
+      --secant: #8a8a8a;
+      --m0: #2563eb;
+      --m1: #d9480f;
+      --curve: #7c3aed;
+      --point: #1a1a1a;
+      --ctxpoint: #9a9a9a;
+      --band: #eef1ff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #16181d;
+        --ink: #e8e8e8;
+        --muted: #9a9a9a;
+        --secant: #9a9a9a;
+        --m0: #6ea8fe;
+        --m1: #ff9066;
+        --curve: #c4a3ff;
+        --point: #e8e8e8;
+        --ctxpoint: #6b6e76;
+        --band: #20233a;
+      }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  </style>
+
+  <rect x="0" y="0" width="640" height="390" fill="var(--bg)" />
+
+  <rect x="240" y="30" width="180" height="310" fill="var(--band)" />
+
+  <line x1="40" y1="340" x2="620" y2="340" stroke="var(--ink)" stroke-width="1" />
+  <g stroke="var(--ink)" stroke-width="1">
+    <line x1="60" y1="340" x2="60" y2="346" />
+    <line x1="240" y1="340" x2="240" y2="346" />
+    <line x1="420" y1="340" x2="420" y2="346" />
+    <line x1="600" y1="340" x2="600" y2="346" />
+  </g>
+  <g fill="var(--muted)" font-size="12" text-anchor="middle">
+    <text x="60" y="362">t=&#8722;1</text>
+    <text x="240" y="362">t=0</text>
+    <text x="420" y="362">t=1</text>
+    <text x="600" y="362">t=2</text>
+  </g>
+
+  <!-- faint context points, not part of the curve -->
+  <circle cx="60" cy="310" r="4" fill="var(--ctxpoint)" opacity="0.55" />
+  <circle cx="600" cy="40" r="4" fill="var(--ctxpoint)" opacity="0.55" />
+  <text x="60" y="296" font-size="12" fill="var(--ctxpoint)" text-anchor="middle">before</text>
+  <text x="600" y="58" font-size="12" fill="var(--ctxpoint)" text-anchor="middle">after</text>
+
+  <!-- plain straight line p0->p1 -->
+  <line x1="240" y1="265" x2="420" y2="205" stroke="var(--secant)" stroke-width="2.5" />
+  <text x="285" y="238" fill="var(--secant)" font-size="13">linear (plain 2-point)</text>
+
+  <!-- the actual Hermite curve, exact cubic bezier -->
+  <path d="M240,265 C300,247.5 360,242.5 420,205"
+        fill="none" stroke="var(--curve)" stroke-width="3.5" />
+  <text x="375" y="246" fill="var(--curve)" font-size="13">&#969;(t) &#8212; Hermite curve</text>
+
+  <!-- short tangent-line segments at p0 and p1, same slopes as figure 1 -->
+  <line x1="186" y1="281" x2="294" y2="249" stroke="var(--m0)" stroke-width="2.5" />
+  <text x="150" y="298" fill="var(--m0)" font-size="13">tangent at p0 (m0=3.5)</text>
+
+  <line x1="366" y1="239" x2="474" y2="171" stroke="var(--m1)" stroke-width="2.5" />
+  <text x="430" y="165" fill="var(--m1)" font-size="13">tangent at p1 (m1=7.5)</text>
+
+  <!-- points -->
+  <circle cx="240" cy="265" r="6" fill="var(--point)" />
+  <circle cx="420" cy="205" r="6" fill="var(--point)" />
+  <g font-size="13" text-anchor="middle" fill="var(--ink)">
+    <text x="240" y="251">p0</text>
+    <text x="420" y="191">p1</text>
+  </g>
+</svg>
