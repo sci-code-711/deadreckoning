@@ -1,14 +1,16 @@
 """Synthetic IMU trajectories with exact, closed-form ground truth.
 
-A :class:`SyntheticTrajectory` is built from a chain of :class:`MotionSegment`
-objects, each holding a constant nav-frame linear acceleration and a constant
-body-frame angular velocity for a fixed duration. Because both quantities are
-piecewise-constant, attitude, velocity and position all have exact closed-form
-solutions in ``t`` - unlike a numerically-integrated reference, this ground
-truth is independent of sample rate and introduces no discretisation error of
-its own, so it can be used to benchmark reconstruction algorithms
-(:class:`deadrec.dead_reckoning.DeadReckoner` and its EKF subclasses) at
-whatever sample rate is being tested.
+A :class:`SyntheticTrajectory` is built from a chain of segments, each
+holding a fixed duration and a closed-form description of the motion over
+that duration: either a constant nav-frame linear acceleration and constant
+body-frame angular velocity (:class:`MotionSegment`), or a constant-speed,
+constant-turn-rate coordinated turn (:class:`CoordinatedTurnSegment`).
+Because each primitive is closed-form, attitude, velocity and position all
+have exact solutions in ``t`` - unlike a numerically-integrated reference,
+this ground truth is independent of sample rate and introduces no
+discretisation error of its own, so it can be used to benchmark
+reconstruction algorithms (:class:`deadrec.dead_reckoning.DeadReckoner` and
+its EKF subclasses) at whatever sample rate is being tested.
 """
 
 import numpy as np
@@ -53,17 +55,89 @@ class MotionSegment:
         self.accel_nav = _as_vec3(accel_nav, "accel_nav")
         self.angular_velocity_body = _as_vec3(angular_velocity_body, "angular_velocity_body")
 
+    def evaluate(self, velocity0: np.ndarray, position0: np.ndarray, dt: float):
+        """
+        Closed-form velocity/position after ``dt`` seconds of this
+        segment's constant acceleration, plus the (constant) true nav-frame
+        acceleration at that instant.
 
-def _advance(
+        """
+        velocity = velocity0 + self.accel_nav * dt
+        position = position0 + velocity0 * dt + 0.5 * self.accel_nav * dt**2
+
+        return velocity, position, self.accel_nav
+
+
+class CoordinatedTurnSegment:
+    """
+    A constant-speed, constant-turn-rate ("coordinated turn") segment:
+    exact closed-form circular motion in the horizontal (x-y) plane. Speed
+    and initial heading are taken from the velocity the trajectory has on
+    entering this segment (so segments chain naturally - just specify the
+    turn rate); the vertical velocity component is held constant, so this
+    primitive models level turns.
+
+    Args:
+        * duration {``float``} -- Length of this segment, in seconds. Must
+          be positive.
+        * turn_rate_deg {``float``} -- Constant turn rate about the
+          vertical (gravity) axis, in degrees/s. Positive turns the
+          horizontal velocity from ``+x`` toward ``+y``.
+
+    """
+
+    def __init__(self, duration: float, turn_rate_deg: float):
+        if duration <= 0:
+            raise ValueError(f"duration must be positive, got {duration}")
+
+        self.duration = float(duration)
+        self.turn_rate_deg = float(turn_rate_deg)
+        self.angular_velocity_body = np.array([0.0, 0.0, turn_rate_deg])
+
+    def evaluate(self, velocity0: np.ndarray, position0: np.ndarray, dt: float):
+        """
+        Closed-form velocity/position after ``dt`` seconds of this
+        segment's constant-speed turn, plus the true (centripetal)
+        nav-frame acceleration at that instant.
+
+        """
+        omega = np.radians(self.turn_rate_deg)
+        vx0, vy0, vz0 = velocity0
+        speed_xy = np.hypot(vx0, vy0)
+        heading0 = np.arctan2(vy0, vx0) if speed_xy > 0 else 0.0
+
+        if abs(omega) < 1e-12:
+            velocity = np.array([vx0, vy0, vz0])
+            position = position0 + velocity0 * dt
+            accel_nav = np.zeros(3)
+
+            return velocity, position, accel_nav
+
+        heading = heading0 + omega * dt
+        velocity = np.array([speed_xy * np.cos(heading), speed_xy * np.sin(heading), vz0])
+        position = position0 + np.array(
+            [
+                speed_xy / omega * (np.sin(heading) - np.sin(heading0)),
+                -speed_xy / omega * (np.cos(heading) - np.cos(heading0)),
+                vz0 * dt,
+            ]
+        )
+        accel_nav = speed_xy * omega * np.array([-np.sin(heading), np.cos(heading), 0.0])
+
+        return velocity, position, accel_nav
+
+
+def _propagate(
     attitude: Quaternion,
     velocity: np.ndarray,
     position: np.ndarray,
-    segment: MotionSegment,
+    segment,
     dt: float,
 ):
     """
-    Closed-form propagation of attitude/velocity/position over ``dt``
-    seconds of ``segment``'s constant acceleration/angular velocity.
+    Propagate attitude/velocity/position over ``dt`` seconds of
+    ``segment``, and return the true nav-frame acceleration at that
+    instant, using ``segment``'s own closed-form :meth:`evaluate`.
 
     """
     rate_rad = np.radians(segment.angular_velocity_body)
@@ -74,10 +148,9 @@ def _advance(
         attitude = attitude * delta
         attitude = attitude * (1.0 / abs(attitude))
 
-    new_velocity = velocity + segment.accel_nav * dt
-    new_position = position + velocity * dt + 0.5 * segment.accel_nav * dt**2
+    new_velocity, new_position, accel_nav = segment.evaluate(velocity, position, dt)
 
-    return attitude, new_velocity, new_position
+    return attitude, new_velocity, new_position, accel_nav
 
 
 def _nav_accel_to_body_frame(
@@ -102,11 +175,15 @@ def _nav_accel_to_body_frame(
 class SyntheticTrajectory:
     """
     A synthetic trajectory with exact, closed-form ground truth, built from
-    a chain of :class:`MotionSegment` objects.
+    a chain of segments (:class:`MotionSegment` and/or
+    :class:`CoordinatedTurnSegment`).
 
     Args:
-        * segments {``list[MotionSegment]``} -- The segments making up this
-          trajectory, in order. Must be non-empty.
+        * segments {``list``} -- The segments making up this trajectory, in
+          order. Must be non-empty. Each must expose ``duration``,
+          ``angular_velocity_body`` and an
+          ``evaluate(velocity0, position0, dt)`` method, as
+          :class:`MotionSegment` and :class:`CoordinatedTurnSegment` do.
         * initial_attitude {``Quaternion``} -- Attitude at ``t=0``. Defaults
           to the identity quaternion.
         * initial_velocity {``array-like``} -- Velocity at ``t=0``. Defaults
@@ -124,7 +201,7 @@ class SyntheticTrajectory:
 
     def __init__(
         self,
-        segments: list[MotionSegment],
+        segments: list,
         *,
         initial_attitude: Quaternion = None,
         initial_velocity=(0.0, 0.0, 0.0),
@@ -158,7 +235,7 @@ class SyntheticTrajectory:
         starts = []
         for segment in self.segments:
             starts.append((attitude, velocity, position))
-            attitude, velocity, position = _advance(
+            attitude, velocity, position, _accel_nav = _propagate(
                 attitude, velocity, position, segment, segment.duration
             )
 
@@ -175,9 +252,9 @@ class SyntheticTrajectory:
         q0, v0, p0 = self._segment_starts[idx]
         elapsed = min(max(t - self._boundaries[idx], 0.0), segment.duration)
 
-        attitude, velocity, position = _advance(q0, v0, p0, segment, elapsed)
+        attitude, velocity, position, accel_nav = _propagate(q0, v0, p0, segment, elapsed)
 
-        return segment, attitude, velocity, position
+        return segment, attitude, velocity, position, accel_nav
 
     def state_at(self, t: float) -> TrajectoryState:
         """
@@ -190,12 +267,12 @@ class SyntheticTrajectory:
             * {``TrajectoryState``}
 
         """
-        segment, attitude, velocity, position = self._evaluate(t)
+        _segment, attitude, velocity, position, accel_nav = self._evaluate(t)
 
         return TrajectoryState(
             t=t,
             attitude=attitude,
-            accel_nav=segment.accel_nav,
+            accel_nav=accel_nav,
             velocity=velocity,
             position=position,
             euler=attitude.to_euler_angles(),
@@ -212,9 +289,9 @@ class SyntheticTrajectory:
             * {``ImuSample``}
 
         """
-        segment, attitude, _velocity, _position = self._evaluate(t)
+        segment, attitude, _velocity, _position, accel_nav = self._evaluate(t)
         accel_body = _nav_accel_to_body_frame(
-            segment.accel_nav, attitude, self.gravity_magnitude, self.gravity_direction
+            accel_nav, attitude, self.gravity_magnitude, self.gravity_direction
         )
 
         return ImuSample(t=t, accel=accel_body, gyro=segment.angular_velocity_body)
