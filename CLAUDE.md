@@ -67,3 +67,22 @@ uv run pytest
   enforced in CI and must pass cleanly.
 - `pyproject.toml` + `uv` is the sole source of truth for dependencies;
   there is no conda `environment.yml` anymore.
+
+## Ticket workflow
+
+Work in this repo is scoped and tracked as lightweight markdown tickets
+under `tickets/`. Use these skills rather than improvising the workflow:
+
+- `plan-work` — turns a request, bug report, or idea into one or more
+  scoped tickets *before* any code is written. Use this first for
+  anything nontrivial.
+- `complete-ticket` — verifies a ticket's acceptance criteria and the
+  repo's required checks (`ruff check`, `ruff format --check`, `pytest`)
+  before marking it done. Use this when work on a ticket looks finished.
+- `write-ticket` — subskill that defines the canonical ticket format
+  (frontmatter + Context/Acceptance criteria/Out of scope/Notes). It's
+  invoked by the two skills above to create or update ticket files; you
+  shouldn't normally need to call it directly.
+
+See `.claude/skills/*/SKILL.md` for the full instructions each skill
+follows.
