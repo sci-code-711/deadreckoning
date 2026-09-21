@@ -69,6 +69,9 @@ uv run deadrec run --help
 The mathematical basis for the trajectory reconstruction methods used here
 can be found in the [accompanying paper](https://github.com/sci-code-711/deadreckoning/blob/main/A035_paper.pdf).
 
+For the pluggable interpolation/integration strategies used to propagate
+attitude between samples, see [`docs/interpolation.md`](docs/interpolation.md).
+
 The research for this paper was conducted using a 6 axis LSM6SD3 IMU embedded
 on an Arduino 33 IoT board.
 
