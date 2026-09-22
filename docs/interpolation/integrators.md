@@ -155,17 +155,51 @@ general — only 2nd-order accurate (local truncation error `O(dt³)`), the
 same order as the classical two-sample coning-compensation formulas from
 the strapdown-INS literature this is closely related to.
 
+## `ConingIntegrator`
+
+`MagnusIntegrator`'s commutator correction only uses the step's two
+endpoint samples, fitting a straight line to `w(t)` between them. But a
+third sample is already available — `m = w(tm)`, the same midpoint
+`MuntheKaasIntegrator` queries for its Simpson's-rule integral term.
+Fitting the unique *quadratic* through all three points `a = w(t0)`,
+`m = w(tm)`, `b = w(t1)` is a strictly better model of `w(t)` than a line
+through just the endpoints, so the Magnus commutator correction computed
+from it is more accurate too — coning error is specifically the error
+from modelling a rotating rate vector's axis too coarsely, and a
+quadratic captures curvature a line can't.
+
+The rotation vector is the quadratic's exact integral (Simpson's rule,
+matching `MuntheKaasIntegrator`) plus the quadratic's own commutator
+correction term:
+
+```
+Θ = dt/6*(a + 4m + b) + dt²*(1/15*(a×m) + 1/60*(a×b) + 1/15*(m×b))
+q1 = q0 ⊗ exp(Θ)
+```
+
+These coefficients aren't from a memorized literature table — they were
+derived by numerically fitting the double-integral commutator term for
+the exact quadratic model, then confirmed two ways: the fit matches a
+fine-grained numerical reference to machine precision, and, as a strong
+independent check, setting `m = (a+b)/2` (degenerating the quadratic
+back to a line) reduces this formula *exactly* to `MagnusIntegrator`'s
+`dt²/12*(a×b)` term. This is the same technique family as the classical
+Savage-style N-sample strapdown-INS coning algorithms and higher-order
+Magnus expansions, derived here from first principles for this specific
+quadratic model rather than reproduced from a numbered coefficient table.
+
 ## Currently implemented, and what's next
 
-Five integration strategies are implemented, trading `w(t)`-evaluation
+Six integration strategies are implemented, trading `w(t)`-evaluation
 cost against accuracy and coning-correction: `EulerIntegrator` (1
 evaluation, 1st-order) through `RK4Integrator`/`MuntheKaasIntegrator`
 (3-4 evaluations, higher-order but no coning correction) to
-`MagnusIntegrator` (2 evaluations, 2nd-order with coning correction).
-Further strategies — closed-form strapdown-INS coning algorithms, higher-
-order Magnus expansions, or multistep methods using rate history across
-steps — are conceivable future additions, without committing to any
-particular one here.
+`MagnusIntegrator` (2 evaluations, linear-model coning correction) and
+`ConingIntegrator` (3 evaluations, quadratic-model coning correction).
+Further strategies — higher-sample coning algorithms, higher-order Magnus
+expansions, or multistep methods using rate history across steps — are
+conceivable future additions, without committing to any particular one
+here.
 
 ## How we handle look-ahead windows
 

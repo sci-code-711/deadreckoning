@@ -203,3 +203,60 @@ class MagnusIntegrator(AttitudeIntegrator):
 
         result = q0 * Quaternion.from_axis_angle(rotation_vector, angle)
         return result * (1.0 / abs(result))
+
+
+class ConingIntegrator(AttitudeIntegrator):
+    """
+    Coning-corrected integrator using all three of the step's samples -
+    ``a = omega(t0)``, ``m = omega(tm)``, ``b = omega(t1)`` - for the
+    commutator correction, rather than just the two endpoints
+    :class:`MagnusIntegrator` uses. Fitting the unique quadratic through
+    all three points (the same quadratic :class:`MuntheKaasIntegrator`'s
+    Simpson's-rule integral term is already implicitly based on) is a
+    strictly better model of ``w(t)`` than a straight line between the
+    endpoints, so the Magnus commutator correction computed from it is
+    more accurate too - the coning-error class this is named for is
+    exactly the error from modelling a rotating rate vector's axis too
+    coarsely, and a quadratic captures curvature a line can't.
+
+    The rotation vector is the quadratic's exact integral (Simpson's
+    rule, matching :class:`MuntheKaasIntegrator`) plus the quadratic's
+    commutator-correction term:
+
+    ``Theta = dt/6*(a+4m+b) + dt^2*(1/15*(a x m) + 1/60*(a x b) + 1/15*(m x b))``
+
+    composed onto ``q0`` via one exact exponential, same pattern as
+    :class:`MuntheKaasIntegrator`/:class:`MagnusIntegrator`.
+
+    The coefficients above were derived by numerically fitting against a
+    fine-grained numerical double integral for the quadratic model (not
+    hand-derived symbolically, and not reproduced from a specific
+    numbered literature coefficient table - the general technique this
+    belongs to is the family of Savage-style N-sample strapdown-INS
+    coning algorithms / higher-order Magnus expansions), then confirmed
+    two ways: the fit's residual against the numerical reference is at
+    machine precision, and, as a strong independent check, setting
+    ``m = (a+b)/2`` (degenerating the quadratic back to a line) reduces
+    this formula *exactly* to :class:`MagnusIntegrator`'s
+    ``dt^2/12*(a x b)`` term - not merely approximately, confirmed to
+    machine precision.
+    """
+
+    def integrate(
+        self, q0: Quaternion, omega: Callable[[float], np.ndarray], t0: float, t1: float
+    ) -> Quaternion:
+        dt = t1 - t0
+        tm = 0.5 * (t0 + t1)
+        a = omega(t0)
+        m = omega(tm)
+        b = omega(t1)
+
+        integral_term = dt / 6 * (a + 4 * m + b)
+        commutator_correction = dt**2 * (
+            (1 / 15) * np.cross(a, m) + (1 / 60) * np.cross(a, b) + (1 / 15) * np.cross(m, b)
+        )
+        rotation_vector = integral_term + commutator_correction
+        angle = np.linalg.norm(rotation_vector)
+
+        result = q0 * Quaternion.from_axis_angle(rotation_vector, angle)
+        return result * (1.0 / abs(result))
