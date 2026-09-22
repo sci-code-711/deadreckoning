@@ -67,3 +67,29 @@ uv run pytest
   enforced in CI and must pass cleanly.
 - `pyproject.toml` + `uv` is the sole source of truth for dependencies;
   there is no conda `environment.yml` anymore.
+
+## Ticket workflow
+
+Work in this repo is tracked as GitHub issues in
+`sci-code-711/deadreckoning` — tickets are referenced only by their
+GitHub issue number (`#42`), never by an internal id. Use these skills
+rather than improvising the workflow:
+
+- `plan-work` — takes a request or idea through requirements gathering,
+  a design/architecture plan (in Claude Code's plan mode, with human
+  approval), and a ticket breakdown (also approved before anything is
+  pushed) to a set of GitHub issues. Use this first for anything
+  nontrivial; it never pushes issues without explicit approval.
+- `do-ticket` — picks an unblocked ticket (with the user's say), plans
+  its implementation with an approval gate, implements it, verifies it
+  (`ruff check`, `ruff format --check`, `pytest`, plus a docs check), and
+  opens and watches a PR through to merge (which closes the ticket). Use
+  this to actually work a ticket.
+- `write-ticket` — subskill that defines the canonical issue title/body
+  format (including the `Depends on:` line `do-ticket` uses to find
+  unblocked tickets) and drafts or creates the GitHub issue itself. It's
+  invoked by the two skills above; you shouldn't normally need to call it
+  directly.
+
+See `.claude/skills/*/SKILL.md` for the full instructions each skill
+follows.
