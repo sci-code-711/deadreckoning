@@ -44,7 +44,7 @@ def test_noiseless_composite_cases_stay_small_and_bounded(name):
     # still be tiny relative to the trajectory's scale (tens of metres).
     assert result.position_rmse < 0.5
     assert result.final_position_error < 1.0
-    assert result.final_attitude_error < 0.05
+    assert result.final_attitude_error < 3.0  # degrees
 
 
 def test_noise_increases_position_error():

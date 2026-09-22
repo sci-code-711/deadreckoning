@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .metrics import attitude_angle_error_deg, position_errors
 from .noise import add_gaussian_noise
-from .quaternion import Quaternion
 from .samples import TrajectoryState
 from .synthetic import SyntheticTrajectory
 
@@ -28,9 +28,9 @@ class BenchmarkResult:
           across every sampled time.
         * final_position_error {``float``} -- Position error at the last
           sampled time.
-        * final_attitude_error {``float``} -- Angle, in radians, between
-          the reconstructed and ground-truth attitude at the last sampled
-          time.
+        * final_attitude_error {``float``} -- Angle, in degrees
+          (``[0, 180]``), between the reconstructed and ground-truth
+          attitude at the last sampled time.
 
     """
 
@@ -39,15 +39,6 @@ class BenchmarkResult:
     position_rmse: float
     final_position_error: float
     final_attitude_error: float
-
-
-def _attitude_angle_error(a: Quaternion, b: Quaternion) -> float:
-    """The angle (radians, in ``[0, pi]``) between two attitudes."""
-    relative = a.conjugate() * b
-    relative = relative * (1.0 / abs(relative))
-    w = np.clip(abs(relative.w), -1.0, 1.0)
-
-    return float(2 * np.arccos(w))
 
 
 def run_benchmark(
@@ -100,16 +91,14 @@ def run_benchmark(
     )
     reconstructed = reckoner.run(samples)
 
-    position_errors = np.array(
-        [np.linalg.norm(r.position - g.position) for r, g in zip(reconstructed, ground_truth)]
-    )
+    errors = position_errors(reconstructed, [g.position for g in ground_truth])
 
     return BenchmarkResult(
         ground_truth=ground_truth,
         reconstructed=reconstructed,
-        position_rmse=float(np.sqrt(np.mean(position_errors**2))),
-        final_position_error=float(position_errors[-1]),
-        final_attitude_error=_attitude_angle_error(
+        position_rmse=float(np.sqrt(np.mean(errors**2))),
+        final_position_error=float(errors[-1]),
+        final_attitude_error=attitude_angle_error_deg(
             reconstructed[-1].attitude, ground_truth[-1].attitude
         ),
     )

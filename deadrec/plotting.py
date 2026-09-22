@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from .benchmark import BenchmarkResult
+from .metrics import attitude_angle_error_deg, position_errors
 
 # Ground truth is always this color; reconstructions take the next colors in
 # this fixed order, so a given name (e.g. "GravityCorrectedEKF") always gets
@@ -14,24 +15,13 @@ _TRUTH_COLOR = "#2a78d6"
 _SERIES_COLORS = ["#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#4a3aa7", "#e34948"]
 
 
-def _position_errors(result: BenchmarkResult) -> np.ndarray:
+def _attitude_errors_deg(result: BenchmarkResult) -> np.ndarray:
     return np.array(
         [
-            np.linalg.norm(r.position - g.position)
+            attitude_angle_error_deg(r.attitude, g.attitude)
             for r, g in zip(result.reconstructed, result.ground_truth)
         ]
     )
-
-
-def _attitude_errors_deg(result: BenchmarkResult) -> np.ndarray:
-    errors = []
-    for r, g in zip(result.reconstructed, result.ground_truth):
-        relative = r.attitude.conjugate() * g.attitude
-        relative = relative * (1.0 / abs(relative))
-        w = np.clip(abs(relative.w), -1.0, 1.0)
-        errors.append(np.degrees(2 * np.arccos(w)))
-
-    return np.array(errors)
 
 
 def plot_benchmark_results(
@@ -96,7 +86,8 @@ def plot_benchmark_results(
     ax_pos_err = fig.add_subplot(1, 3, 2)
     for i, (name, result) in enumerate(results.items()):
         color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
-        errors = np.maximum(_position_errors(result), 1e-12)
+        reference = [g.position for g in result.ground_truth]
+        errors = np.maximum(position_errors(result.reconstructed, reference), 1e-12)
         ax_pos_err.plot(t, errors, color=color, linewidth=2, label=name)
 
     ax_pos_err.set_yscale("log")
