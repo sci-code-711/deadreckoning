@@ -3,7 +3,12 @@ import math
 import numpy as np
 import pytest
 
-from deadrec.attitude_integration import RK4Integrator
+from deadrec.attitude_integration import (
+    EulerIntegrator,
+    ExactExponentialIntegrator,
+    MuntheKaasIntegrator,
+    RK4Integrator,
+)
 from deadrec.interpolation import TwoPointLinearInterpolator
 from deadrec.kinematics import rk4_attitude_step
 from deadrec.quaternion import Quaternion
@@ -96,3 +101,172 @@ def test_rk4_integrator_queries_omega_at_start_midpoint_and_end():
     RK4Integrator().integrate(Quaternion(1, 0, 0, 0), omega, t0=0.0, t1=0.1)
 
     assert calls == [0.0, 0.05, 0.05, 0.1]
+
+
+# --- EulerIntegrator ---
+
+
+def test_euler_integrator_zero_rate_is_identity():
+    qi = Quaternion.from_eul_angles(0.3, -0.2, 0.1)
+
+    result = EulerIntegrator().integrate(qi, lambda t: np.zeros(3), t0=0.0, t1=0.05)
+
+    _assert_quaternions_close(result, qi)
+
+
+def test_euler_integrator_returns_unit_quaternion():
+    result = EulerIntegrator().integrate(
+        Quaternion(1, 0, 0, 0), lambda t: np.array([1.0, 2.0, 3.0]), t0=0.0, t1=0.02
+    )
+
+    assert abs(result) == pytest.approx(1.0)
+
+
+def test_euler_integrator_queries_omega_once_at_start():
+    calls = []
+
+    def omega(t):
+        calls.append(t)
+        return np.zeros(3)
+
+    EulerIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, t0=0.0, t1=0.1)
+
+    assert calls == [0.0]
+
+
+def test_euler_integrator_error_shrinks_as_dt_shrinks():
+    # First-order accuracy: halving dt should roughly halve the error
+    # against the exact closed-form single-axis rotation.
+    wz_rad = math.radians(90.0)
+
+    def closed_form(dt):
+        return Quaternion.from_axis_angle([0, 0, 1], wz_rad * dt)
+
+    def error(dt):
+        result = EulerIntegrator().integrate(
+            Quaternion(1, 0, 0, 0), lambda t: np.array([0, 0, wz_rad]), t0=0.0, t1=dt
+        )
+        expected = closed_form(dt)
+        return abs(result.z - expected.z)
+
+    err_large = error(0.1)
+    err_small = error(0.05)
+
+    assert err_small < err_large * 0.6  # roughly halves, with slack
+
+
+# --- ExactExponentialIntegrator ---
+
+
+def test_exact_exponential_integrator_zero_rate_is_identity():
+    qi = Quaternion.from_eul_angles(0.3, -0.2, 0.1)
+
+    result = ExactExponentialIntegrator().integrate(qi, lambda t: np.zeros(3), t0=0.0, t1=0.05)
+
+    _assert_quaternions_close(result, qi)
+
+
+def test_exact_exponential_integrator_returns_unit_quaternion():
+    result = ExactExponentialIntegrator().integrate(
+        Quaternion(1, 0, 0, 0), lambda t: np.array([1.0, 2.0, 3.0]), t0=0.0, t1=0.02
+    )
+
+    assert abs(result) == pytest.approx(1.0)
+
+
+def test_exact_exponential_integrator_matches_closed_form_single_axis_rotation():
+    wz_deg = 90.0
+    dt = 0.37  # deliberately not small - this integrator should be exact regardless
+    wz_rad = math.radians(wz_deg)
+
+    result = ExactExponentialIntegrator().integrate(
+        Quaternion(1, 0, 0, 0), lambda t: np.array([0.0, 0.0, wz_rad]), t0=0.0, t1=dt
+    )
+    expected = Quaternion.from_axis_angle([0, 0, 1], wz_rad * dt)
+
+    _assert_quaternions_close(result, expected, abs_tol=1e-12)
+
+
+def test_exact_exponential_integrator_is_exact_for_constant_multi_axis_rate():
+    w = np.array([0.4, -0.9, 1.3])
+    dt = 0.6
+
+    result = ExactExponentialIntegrator().integrate(
+        Quaternion(1, 0, 0, 0), lambda t: w, t0=0.0, t1=dt
+    )
+    expected = Quaternion.from_axis_angle(w, np.linalg.norm(w) * dt)
+
+    _assert_quaternions_close(result, expected, abs_tol=1e-12)
+
+
+def test_exact_exponential_integrator_queries_omega_once_at_midpoint():
+    calls = []
+
+    def omega(t):
+        calls.append(t)
+        return np.zeros(3)
+
+    ExactExponentialIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, t0=0.0, t1=0.1)
+
+    assert calls == [0.05]
+
+
+# --- MuntheKaasIntegrator ---
+
+
+def test_munthe_kaas_integrator_zero_rate_is_identity():
+    qi = Quaternion.from_eul_angles(0.3, -0.2, 0.1)
+
+    result = MuntheKaasIntegrator().integrate(qi, lambda t: np.zeros(3), t0=0.0, t1=0.05)
+
+    _assert_quaternions_close(result, qi)
+
+
+def test_munthe_kaas_integrator_returns_unit_quaternion():
+    result = MuntheKaasIntegrator().integrate(
+        Quaternion(1, 0, 0, 0), lambda t: np.array([1.0, 2.0, 3.0]), t0=0.0, t1=0.02
+    )
+
+    assert abs(result) == pytest.approx(1.0)
+
+
+def test_munthe_kaas_integrator_is_exact_for_constant_single_axis_rotation():
+    wz_deg = 90.0
+    dt = 0.37
+    wz_rad = math.radians(wz_deg)
+
+    result = MuntheKaasIntegrator().integrate(
+        Quaternion(1, 0, 0, 0), lambda t: np.array([0.0, 0.0, wz_rad]), t0=0.0, t1=dt
+    )
+    expected = Quaternion.from_axis_angle([0, 0, 1], wz_rad * dt)
+
+    _assert_quaternions_close(result, expected, abs_tol=1e-12)
+
+
+def test_munthe_kaas_integrator_is_exact_for_a_linearly_varying_single_axis_rate():
+    # Simpson's rule is exact for any polynomial up to cubic - a linearly
+    # varying rate should integrate exactly too, unlike the constant-rate
+    # case alone.
+    dt = 0.4
+
+    def omega(t):
+        return np.array([0.0, 0.0, 2.0 + 5.0 * t])  # linear in t
+
+    result = MuntheKaasIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, t0=0.0, t1=dt)
+
+    true_angle = 2.0 * dt + 2.5 * dt**2  # integral of (2 + 5t) dt from 0 to dt
+    expected = Quaternion.from_axis_angle([0, 0, 1], true_angle)
+
+    _assert_quaternions_close(result, expected, abs_tol=1e-12)
+
+
+def test_munthe_kaas_integrator_queries_omega_at_start_midpoint_and_end():
+    calls = []
+
+    def omega(t):
+        calls.append(t)
+        return np.zeros(3)
+
+    MuntheKaasIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, t0=0.0, t1=0.1)
+
+    assert calls == [0.0, 0.05, 0.1]
