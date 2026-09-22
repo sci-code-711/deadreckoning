@@ -70,14 +70,23 @@ def composite_sequence() -> SyntheticTrajectory:
     decelerate to a stop. A realistic multi-phase motion exercising every
     primitive end to end, with a fully known final state (back at rest).
 
+    Segment durations are deliberately irregular (not round numbers) so
+    their boundaries don't land exactly on the sample grid at common test
+    rates (10-1000 Hz) - a real sensor's fixed sample clock has no reason
+    to line up with a real discontinuity's timing, and testing with
+    boundaries that coincidentally do line up gives a misleadingly easy
+    case. The acceleration/turn-rate magnitudes are chosen to exactly
+    compensate the non-round durations, so the same known velocity
+    milestones (6, 3, 0 m/s; a 90 degree turn) still hold exactly.
+
     """
     return SyntheticTrajectory(
         [
-            MotionSegment(duration=3.0, accel_nav=[2.0, 0.0, 0.0]),  # 0 -> 6 m/s
-            MotionSegment(duration=4.0, accel_nav=[0.0, 0.0, 0.0]),  # cruise at 6 m/s
-            MotionSegment(duration=3.0, accel_nav=[-1.0, 0.0, 0.0]),  # 6 -> 3 m/s
-            CoordinatedTurnSegment(duration=3.0, turn_rate_deg=30.0),  # 90 degree turn
-            MotionSegment(duration=3.0, accel_nav=[0.0, -1.0, 0.0]),  # 3 -> 0 m/s
+            MotionSegment(duration=3.0402, accel_nav=[1.9735543714229327, 0.0, 0.0]),  # 0->6 m/s
+            MotionSegment(duration=4.0532, accel_nav=[0.0, 0.0, 0.0]),  # cruise at 6 m/s
+            MotionSegment(duration=2.9592, accel_nav=[-1.013787510137875, 0.0, 0.0]),  # 6->3 m/s
+            CoordinatedTurnSegment(duration=2.9775, turn_rate_deg=30.22670025188917),  # 90 deg
+            MotionSegment(duration=3.0406, accel_nav=[0.0, -0.9866473722291653, 0.0]),  # 3->0 m/s
         ],
         gravity_magnitude=_G,
     )
@@ -89,18 +98,26 @@ def full_composite() -> SyntheticTrajectory:
     (roll/pitch/yaw together) with translation and a coordinated turn, so
     attitude and position both evolve non-trivially and off-axis.
 
+    Segment durations are deliberately irregular (not round numbers), for
+    the same reason as :func:`composite_sequence` - so boundaries don't
+    coincidentally land on the sample grid at common test rates.
+
     """
     return SyntheticTrajectory(
         [
             MotionSegment(
-                duration=2.0, accel_nav=[1.0, 0.0, 0.0], angular_velocity_body=[15.0, 10.0, 5.0]
+                duration=2.0176, accel_nav=[1.0, 0.0, 0.0], angular_velocity_body=[15.0, 10.0, 5.0]
             ),
             MotionSegment(
-                duration=2.0, accel_nav=[0.0, 1.0, 0.5], angular_velocity_body=[-10.0, 15.0, -5.0]
+                duration=2.0589,
+                accel_nav=[0.0, 1.0, 0.5],
+                angular_velocity_body=[-10.0, 15.0, -5.0],
             ),
-            CoordinatedTurnSegment(duration=2.0, turn_rate_deg=20.0),
+            CoordinatedTurnSegment(duration=1.9816, turn_rate_deg=20.0),
             MotionSegment(
-                duration=2.0, accel_nav=[-0.5, -0.5, 0.0], angular_velocity_body=[5.0, -5.0, 10.0]
+                duration=2.0337,
+                accel_nav=[-0.5, -0.5, 0.0],
+                angular_velocity_body=[5.0, -5.0, 10.0],
             ),
         ],
         gravity_magnitude=_G,

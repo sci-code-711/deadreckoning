@@ -92,38 +92,42 @@ def test_circular_motion_case():
 
 def test_composite_sequence_case_ends_at_rest():
     trajectory = composite_sequence()
-    assert trajectory.duration == pytest.approx(16.0)
+    # Segment durations are deliberately irregular (not round numbers) so
+    # boundaries don't land on the sample grid at common test rates - see
+    # composite_sequence()'s docstring.
+    assert trajectory.duration == pytest.approx(16.0707)
 
     initial = trajectory.state_at(0.0)
     assert np.allclose(initial.velocity, [0, 0, 0])
     assert np.allclose(initial.position, [0, 0, 0])
 
-    # accelerate phase: 0 -> 6 m/s over 3s at 2 m/s^2
-    after_accelerate = trajectory.state_at(3.0)
+    # accelerate phase: 0 -> 6 m/s
+    after_accelerate = trajectory.state_at(3.0402)
     assert np.allclose(after_accelerate.velocity, [6.0, 0.0, 0.0])
 
     # cruise phase holds speed
-    after_cruise = trajectory.state_at(7.0)
+    after_cruise = trajectory.state_at(7.0934)
     assert np.allclose(after_cruise.velocity, [6.0, 0.0, 0.0])
 
-    # decelerate phase: 6 -> 3 m/s over 3s
-    after_decelerate = trajectory.state_at(10.0)
+    # decelerate phase: 6 -> 3 m/s
+    after_decelerate = trajectory.state_at(10.0526)
     assert np.allclose(after_decelerate.velocity, [3.0, 0.0, 0.0])
 
-    # turn phase: 90 degrees at 30 deg/s over 3s, constant 3 m/s speed
-    after_turn = trajectory.state_at(13.0)
+    # turn phase: 90 degrees, constant 3 m/s speed
+    after_turn = trajectory.state_at(13.0301)
     assert np.allclose(after_turn.velocity, [0.0, 3.0, 0.0], atol=1e-9)
 
-    # final stop phase: 3 -> 0 m/s over 3s, known final state.
-    final = trajectory.state_at(16.0)
+    # final stop phase: 3 -> 0 m/s, known final state.
+    final = trajectory.state_at(16.0707)
     assert np.allclose(final.velocity, [0.0, 0.0, 0.0], atol=1e-9)
 
 
 def test_full_composite_case_moves_and_rotates_off_axis():
     trajectory = full_composite()
-    assert trajectory.duration == pytest.approx(8.0)
+    # Segment durations are deliberately irregular - see the docstring.
+    assert trajectory.duration == pytest.approx(8.0918)
 
-    final = trajectory.state_at(8.0)
+    final = trajectory.state_at(trajectory.duration)
     # A stress-test sanity check, not an exact value: multi-axis rotation
     # and translation should leave every position/attitude axis disturbed.
     assert np.all(np.abs(final.position) > 1e-6)
