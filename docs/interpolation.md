@@ -48,7 +48,8 @@ for the maths behind each):
 
 **Integrators** (see [integrators.md](interpolation/integrators.md)):
 
-- `RK4Integrator`
+- `RK4Integrator`, `EulerIntegrator`, `ExactExponentialIntegrator`,
+  `MuntheKaasIntegrator`, `MagnusIntegrator`
 
 ## Using them in code
 

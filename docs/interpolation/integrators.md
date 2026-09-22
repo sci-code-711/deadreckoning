@@ -65,10 +65,107 @@ method itself, following from the classical Runge-Kutta stage weights and
 error analysis, not something specific to this codebase's implementation
 of it.
 
-`RK4Integrator` is currently the only integration strategy implemented.
-Other strategies — trading accuracy for fewer `w(t)` evaluations per step,
-or vice versa — are conceivable future additions, without committing to
-any particular one here.
+## `EulerIntegrator`
+
+The simplest possible numerical scheme: forward (explicit) Euler,
+approximating the whole step's derivative using a single evaluation at
+its start:
+
+```
+q1 = q0 + dt * 0.5*Omega(w(t0))*q0
+```
+
+(renormalized). Local truncation error `O(dt²)` per step (1st-order
+accurate globally) — the cheapest strategy available, one `w(t)`
+evaluation per step, useful as a low-cost baseline to compare the other
+integrators against.
+
+## `ExactExponentialIntegrator`
+
+When the angular rate is genuinely constant over the step — fixed axis,
+fixed magnitude `w` — the ODE has a closed-form solution: composing `q0`
+with the rotation quaternion for angle `|w|·dt` about axis `w/|w|`,
+
+```
+q1 = q0 ⊗ (cos(|w|dt/2) + sin(|w|dt/2)·(w/|w|))
+```
+
+exact regardless of step size, with no truncation error at all. It
+samples `w(t)` once — a single point estimate is all a genuinely constant
+rate needs, since there's no "which point" ambiguity when the rate isn't
+actually changing. Pairs naturally with a model that holds the rate
+constant over the step.
+
+## `MuntheKaasIntegrator`
+
+Instead of stepping the quaternion ODE directly, this integrates the
+angular rate itself to get a single net rotation vector for the whole
+step, then composes that vector onto `q0` with one exact exponential
+(the same composition `ExactExponentialIntegrator` uses, but with a
+rotation vector built from the *whole* step rather than assumed
+constant). For a rate-only vector ODE, RK4-style quadrature of `w(t)`
+reduces exactly to Simpson's rule:
+
+```
+rotation_vector = dt/6 * (w(t0) + 4*w(tm) + w(t1))
+q1 = q0 ⊗ exp(rotation_vector)
+```
+
+This composes via a true rotation exponential rather than a linear ODE
+step in the ambient 4D quaternion space, structurally different from
+`RK4Integrator`. It does *not*, however, correct for the non-commutativity
+between rotations about *different* axes within the same step ("coning"
+error) — its rotation vector only captures the plain integral of `w(t)`,
+with no correction for how the rotation's own instantaneous axis moves
+during the step. `MagnusIntegrator`, below, adds exactly that correction.
+
+## `MagnusIntegrator`
+
+The Magnus expansion solves the same linear ODE by writing the exact
+solution as a single exponential of a rotation vector `Θ`, built as a
+series:
+
+```
+Θ = ∫w dt - 1/2 ∫₀ᵗ∫₀ˢ [w(s), w(r)] dr ds + ...
+```
+
+where `[a, b]` is the so(3) commutator (`a × b` under the vector
+representation). The first term alone is just the plain integral of the
+rate — what `MuntheKaasIntegrator` computes. The second term is the
+leading *coning correction*: it accounts for the rotation's axis itself
+moving during the step, which a bare integral of `w(t)` can't capture.
+
+Truncating after this term and assuming `w(t)` varies linearly between
+the step's two endpoint samples `a = w(t0)`, `b = w(t1)` gives a closed
+form for both integrals — no numerical double integration needed:
+
+```
+Θ = dt/2*(a + b) + dt²/12*(a × b)
+q1 = q0 ⊗ exp(Θ)
+```
+
+This only needs two `w(t)` evaluations — cheaper than
+`MuntheKaasIntegrator`'s three — while adding the correction
+`MuntheKaasIntegrator` lacks. When the endpoint vectors are parallel
+(including the constant-rate case), the cross term vanishes exactly and
+this reduces to the plain trapezoidal single-axis case, which is itself
+exact. For non-parallel endpoints, though, this is *not* an exact
+solution — the Magnus series has further, uncomputed commutator terms in
+general — only 2nd-order accurate (local truncation error `O(dt³)`), the
+same order as the classical two-sample coning-compensation formulas from
+the strapdown-INS literature this is closely related to.
+
+## Currently implemented, and what's next
+
+Five integration strategies are implemented, trading `w(t)`-evaluation
+cost against accuracy and coning-correction: `EulerIntegrator` (1
+evaluation, 1st-order) through `RK4Integrator`/`MuntheKaasIntegrator`
+(3-4 evaluations, higher-order but no coning correction) to
+`MagnusIntegrator` (2 evaluations, 2nd-order with coning correction).
+Further strategies — closed-form strapdown-INS coning algorithms, higher-
+order Magnus expansions, or multistep methods using rate history across
+steps — are conceivable future additions, without committing to any
+particular one here.
 
 ## How we handle look-ahead windows
 
