@@ -214,3 +214,64 @@ def test_quaternion_from_axis_angle_composes_via_multiplication():
     assert composed.x == pytest.approx(full.x)
     assert composed.y == pytest.approx(full.y)
     assert composed.z == pytest.approx(full.z)
+
+
+def _assert_quaternions_close(a, b, abs_tol=1e-9):
+    assert a.w == pytest.approx(b.w, abs=abs_tol)
+    assert a.x == pytest.approx(b.x, abs=abs_tol)
+    assert a.y == pytest.approx(b.y, abs=abs_tol)
+    assert a.z == pytest.approx(b.z, abs=abs_tol)
+
+
+def test_quaternion_slerp_endpoints():
+    a = Quaternion(1, 0, 0, 0)
+    b = Quaternion.from_axis_angle([0, 0, 1], np.pi / 2)
+
+    _assert_quaternions_close(Quaternion.slerp(a, b, 0.0), a)
+    _assert_quaternions_close(Quaternion.slerp(a, b, 1.0), b)
+
+
+def test_quaternion_slerp_midpoint_bisects_the_angle():
+    axis = [0, 0, 1]
+    a = Quaternion(1, 0, 0, 0)
+    b = Quaternion.from_axis_angle(axis, np.pi / 2)
+    expected_mid = Quaternion.from_axis_angle(axis, np.pi / 4)
+
+    _assert_quaternions_close(Quaternion.slerp(a, b, 0.5), expected_mid)
+
+
+def test_quaternion_slerp_moves_at_a_constant_angular_rate():
+    axis = [1.0, -2.0, 0.5]
+    a = Quaternion(1, 0, 0, 0)
+    b = Quaternion.from_axis_angle(axis, np.radians(120.0))
+
+    ts = np.linspace(0, 1, 6)
+    points = [Quaternion.slerp(a, b, t) for t in ts]
+
+    def angle_between(p, q):
+        dot = min(abs(p.w * q.w + p.x * q.x + p.y * q.y + p.z * q.z), 1.0)
+        return 2 * np.arccos(dot)
+
+    steps = [angle_between(points[i], points[i + 1]) for i in range(len(points) - 1)]
+
+    for step in steps[1:]:
+        assert step == pytest.approx(steps[0], abs=1e-9)
+
+
+def test_quaternion_slerp_takes_the_shorter_path():
+    a = Quaternion(1, 0, 0, 0)
+    # Stored more than 90 degrees from `a` (dot < 0), even though it
+    # represents a rotation only 10 degrees away from identity.
+    b = -Quaternion.from_axis_angle([0, 0, 1], np.radians(10))
+
+    result = Quaternion.slerp(a, b, 0.5)
+
+    # The shorter path passes through a rotation close to identity, not
+    # one close to the ~175 degree rotation the raw quaternions imply.
+    assert abs(result.w) == pytest.approx(1.0, abs=1e-2)
+
+
+def test_quaternion_slerp_of_identical_quaternions_is_stable():
+    a = Quaternion.from_axis_angle([0, 1, 0], 0.3)
+
+    _assert_quaternions_close(Quaternion.slerp(a, a, 0.5), a)
