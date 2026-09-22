@@ -274,3 +274,42 @@ class Quaternion:
         half = angle / 2
 
         return cls(np.cos(half), *(axis * np.sin(half)))
+
+    @classmethod
+    def slerp(cls, a: "Quaternion", b: "Quaternion", t: float) -> "Quaternion":
+        """
+        Spherical linear interpolation between two unit quaternions, at
+        fraction ``t`` of the angle between them. Always takes the shorter
+        of the two paths around the great circle (flipping ``b`` first if
+        the quaternions are more than 90 degrees apart), since ``q`` and
+        ``-q`` represent the same rotation.
+
+        Args:
+            * a {``Quaternion``} -- The unit quaternion at ``t=0``.
+            * b {``Quaternion``} -- The unit quaternion at ``t=1``.
+            * t {``number``} -- Interpolation fraction, typically in
+              ``[0, 1]``.
+
+        Returns:
+            * {``Quaternion``} -- The interpolated unit quaternion.
+
+        """
+        dot = a.w * b.w + a.x * b.x + a.y * b.y + a.z * b.z
+
+        if dot < 0:
+            b = -b
+            dot = -dot
+
+        dot = min(dot, 1.0)
+
+        if dot > 1.0 - 1e-9:
+            result = a + (b - a) * t
+            return result * (1.0 / abs(result))
+
+        theta_0 = np.arccos(dot)
+        theta = theta_0 * t
+
+        orthogonal = b - a * dot
+        orthogonal = orthogonal * (1.0 / abs(orthogonal))
+
+        return a * np.cos(theta) + orthogonal * np.sin(theta)
