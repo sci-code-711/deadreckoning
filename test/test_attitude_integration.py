@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from deadrec.attitude_integration import (
+    ConingIntegrator,
     EulerIntegrator,
     ExactExponentialIntegrator,
     MagnusIntegrator,
@@ -357,3 +358,115 @@ def test_magnus_integrator_more_accurate_than_munthe_kaas_for_coning_case():
     munthe_kaas_error = quaternion_error(munthe_kaas_result)
 
     assert magnus_error < munthe_kaas_error / 5
+
+
+# --- ConingIntegrator ---
+
+
+def test_coning_integrator_zero_rate_is_identity():
+    qi = Quaternion.from_eul_angles(0.3, -0.2, 0.1)
+
+    result = ConingIntegrator().integrate(qi, lambda t: np.zeros(3), t0=0.0, t1=0.05)
+
+    _assert_quaternions_close(result, qi)
+
+
+def test_coning_integrator_returns_unit_quaternion():
+    result = ConingIntegrator().integrate(
+        Quaternion(1, 0, 0, 0), lambda t: np.array([1.0, 2.0, 3.0]), t0=0.0, t1=0.02
+    )
+
+    assert abs(result) == pytest.approx(1.0)
+
+
+def test_coning_integrator_is_exact_for_constant_single_axis_rotation():
+    wz_deg = 90.0
+    dt = 0.37
+    wz_rad = math.radians(wz_deg)
+
+    result = ConingIntegrator().integrate(
+        Quaternion(1, 0, 0, 0), lambda t: np.array([0.0, 0.0, wz_rad]), t0=0.0, t1=dt
+    )
+    expected = Quaternion.from_axis_angle([0, 0, 1], wz_rad * dt)
+
+    _assert_quaternions_close(result, expected, abs_tol=1e-12)
+
+
+def test_coning_integrator_queries_omega_at_start_midpoint_and_end():
+    calls = []
+
+    def omega(t):
+        calls.append(t)
+        return np.zeros(3)
+
+    ConingIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, t0=0.0, t1=0.1)
+
+    assert calls == [0.0, 0.05, 0.1]
+
+
+def test_coning_integrator_matches_magnus_when_midpoint_is_the_linear_average():
+    # When w(t) is linear (so the midpoint sample equals the linear
+    # average of the endpoints, giving the quadratic fit no genuine
+    # curvature to exploit), ConingIntegrator's quadratic-based
+    # commutator correction must reduce *exactly* to MagnusIntegrator's
+    # linear one - this is the derivation's own correctness check,
+    # kept here as a permanent regression test.
+    a = np.array([1.5, -0.4, 0.2])
+    b = np.array([0.0, 1.8, -0.6])
+    dt = 0.3
+
+    def omega(t):
+        frac = t / dt
+        return a + frac * (b - a)
+
+    coning_result = ConingIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, 0.0, dt)
+    magnus_result = MagnusIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, 0.0, dt)
+
+    _assert_quaternions_close(coning_result, magnus_result, abs_tol=1e-12)
+
+
+def test_coning_integrator_more_accurate_than_munthe_kaas_for_coning_case():
+    # A genuinely rotating rate vector within the step (not just linearly
+    # interpolated between two endpoints) - true coning motion, where the
+    # midpoint sample carries real curvature information a 2-point linear
+    # model (MagnusIntegrator) can't see, but ConingIntegrator's
+    # quadratic fit can.
+    # dt deliberately isn't a multiple of the coning period (which would
+    # make a == b exactly, zeroing out one of the three correction terms
+    # and understating the improvement) - a generic fraction of it instead.
+    amplitude = 1.0
+    omega_c = 2 * np.pi * 2.0  # 2 Hz
+    dt = 0.15
+
+    def omega(t):
+        return amplitude * np.array([np.cos(omega_c * t), np.sin(omega_c * t), 0.0])
+
+    # Fine-grained numerical reference: substep the *true* omega(t)
+    # (not a linear interpolant) with ExactExponentialIntegrator.
+    reference = Quaternion(1, 0, 0, 0)
+    steps = np.linspace(0.0, dt, 1001)
+    for i in range(len(steps) - 1):
+        reference = ExactExponentialIntegrator().integrate(reference, omega, steps[i], steps[i + 1])
+
+    def quaternion_error(q):
+        diff = np.array([q.w, q.x, q.y, q.z]) - np.array(
+            [reference.w, reference.x, reference.y, reference.z]
+        )
+        diff_flipped = np.array([q.w, q.x, q.y, q.z]) + np.array(
+            [reference.w, reference.x, reference.y, reference.z]
+        )
+        return min(np.linalg.norm(diff), np.linalg.norm(diff_flipped))
+
+    coning_result = ConingIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, 0.0, dt)
+    munthe_kaas_result = MuntheKaasIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, 0.0, dt)
+    magnus_result = MagnusIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, 0.0, dt)
+
+    coning_error = quaternion_error(coning_result)
+    munthe_kaas_error = quaternion_error(munthe_kaas_result)
+    magnus_error = quaternion_error(magnus_result)
+
+    # Empirically ~4.4x and ~59x respectively for this case - safe margins
+    # well under both, since the point is confirming the ordering holds,
+    # not pinning the exact ratio.
+    assert coning_error < munthe_kaas_error / 3
+    assert coning_error < magnus_error / 10
