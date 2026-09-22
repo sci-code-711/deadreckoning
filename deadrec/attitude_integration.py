@@ -155,3 +155,51 @@ class MuntheKaasIntegrator(AttitudeIntegrator):
 
         result = q0 * Quaternion.from_axis_angle(rotation_vector, angle)
         return result * (1.0 / abs(result))
+
+
+class MagnusIntegrator(AttitudeIntegrator):
+    """
+    2nd-order Magnus expansion, using the step's two endpoint samples
+    ``a = omega(t0)``, ``b = omega(t1)``. The Magnus series for
+    ``dq/dt = 0.5*Omega(w(t))*q`` gives a rotation vector
+    ``Theta = integral(w dt) - 0.5 * double_integral([w(s), w(r)])``, where
+    ``[.,.]`` is the so(3) commutator (a cross product under the vector
+    representation). Assuming ``w(t)`` varies linearly between the two
+    endpoints - i.e. consistent with what :class:`deadrec.interpolation.
+    TwoPointLinearInterpolator` actually supplies - both integrals have a
+    closed form, giving ``Theta = dt/2*(a+b) + dt**2/12*(a cross b))``
+    (the sign of the cross term confirmed empirically against a
+    fine-grained reference, not just derived by hand).
+
+    Unlike :class:`MuntheKaasIntegrator`, which composes a bare Simpson's-
+    rule quadrature of ``w(t)`` onto ``q0`` via one exponential with no
+    correction for the non-commutativity between rotations about
+    *different* axes within the step ("coning" error), this adds the
+    leading commutator correction term - and is measurably more accurate
+    than :class:`MuntheKaasIntegrator` whenever the rate's *direction*
+    genuinely changes within a step (its cross term is exactly zero, and
+    it degenerates to :class:`MuntheKaasIntegrator`'s bare quadrature,
+    when the endpoint vectors are parallel - including the constant-rate
+    case).
+
+    This is *not* an exact solution even when ``w(t)`` is genuinely linear
+    over the step - the Magnus series has further, uncomputed commutator
+    terms in general - only 2nd-order accurate (local truncation error
+    ``O(dt**3)``), same as the classical two-sample coning-compensation
+    formulas in the strapdown-INS literature this is closely related to
+    (see the dedicated closed-form coning-algorithm integrator for that
+    more specialized approach).
+    """
+
+    def integrate(
+        self, q0: Quaternion, omega: Callable[[float], np.ndarray], t0: float, t1: float
+    ) -> Quaternion:
+        dt = t1 - t0
+        a = omega(t0)
+        b = omega(t1)
+
+        rotation_vector = dt / 2 * (a + b) + (dt**2 / 12) * np.cross(a, b)
+        angle = np.linalg.norm(rotation_vector)
+
+        result = q0 * Quaternion.from_axis_angle(rotation_vector, angle)
+        return result * (1.0 / abs(result))

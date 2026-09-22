@@ -6,6 +6,7 @@ import pytest
 from deadrec.attitude_integration import (
     EulerIntegrator,
     ExactExponentialIntegrator,
+    MagnusIntegrator,
     MuntheKaasIntegrator,
     RK4Integrator,
 )
@@ -270,3 +271,89 @@ def test_munthe_kaas_integrator_queries_omega_at_start_midpoint_and_end():
     MuntheKaasIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, t0=0.0, t1=0.1)
 
     assert calls == [0.0, 0.05, 0.1]
+
+
+# --- MagnusIntegrator ---
+
+
+def test_magnus_integrator_zero_rate_is_identity():
+    qi = Quaternion.from_eul_angles(0.3, -0.2, 0.1)
+
+    result = MagnusIntegrator().integrate(qi, lambda t: np.zeros(3), t0=0.0, t1=0.05)
+
+    _assert_quaternions_close(result, qi)
+
+
+def test_magnus_integrator_returns_unit_quaternion():
+    result = MagnusIntegrator().integrate(
+        Quaternion(1, 0, 0, 0), lambda t: np.array([1.0, 2.0, 3.0]), t0=0.0, t1=0.02
+    )
+
+    assert abs(result) == pytest.approx(1.0)
+
+
+def test_magnus_integrator_is_exact_for_constant_single_axis_rotation():
+    # Parallel endpoint vectors -> zero commutator term -> reduces to the
+    # plain trapezoidal (exact, for constant rate) single-axis case.
+    wz_deg = 90.0
+    dt = 0.37
+    wz_rad = math.radians(wz_deg)
+
+    result = MagnusIntegrator().integrate(
+        Quaternion(1, 0, 0, 0), lambda t: np.array([0.0, 0.0, wz_rad]), t0=0.0, t1=dt
+    )
+    expected = Quaternion.from_axis_angle([0, 0, 1], wz_rad * dt)
+
+    _assert_quaternions_close(result, expected, abs_tol=1e-12)
+
+
+def test_magnus_integrator_queries_omega_at_start_and_end():
+    calls = []
+
+    def omega(t):
+        calls.append(t)
+        return np.zeros(3)
+
+    MagnusIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, t0=0.0, t1=0.1)
+
+    assert calls == [0.0, 0.1]
+
+
+def test_magnus_integrator_more_accurate_than_munthe_kaas_for_coning_case():
+    # A case where the rate's *direction* genuinely changes within the
+    # step (two orthogonal endpoint vectors) - the regime coning error
+    # (and this integrator's commutator correction) actually shows up in.
+    # A constant/parallel-vector rate can't distinguish these integrators
+    # at all, since the commutator term is exactly zero either way.
+    a = np.array([1.5, 0.0, 0.0])
+    b = np.array([0.0, 1.8, 0.0])
+    dt = 0.3
+
+    def omega(t):
+        frac = t / dt
+        return a + frac * (b - a)
+
+    # Fine-grained numerical reference: subdivide into many substeps and
+    # integrate the same linearly-interpolated omega(t) exactly per
+    # substep - converges to the true ODE solution under this omega(t).
+    reference = Quaternion(1, 0, 0, 0)
+    steps = np.linspace(0.0, dt, 2001)
+    for i in range(len(steps) - 1):
+        reference = ExactExponentialIntegrator().integrate(reference, omega, steps[i], steps[i + 1])
+
+    def quaternion_error(q):
+        diff = np.array([q.w, q.x, q.y, q.z]) - np.array(
+            [reference.w, reference.x, reference.y, reference.z]
+        )
+        diff_flipped = np.array([q.w, q.x, q.y, q.z]) + np.array(
+            [reference.w, reference.x, reference.y, reference.z]
+        )
+        return min(np.linalg.norm(diff), np.linalg.norm(diff_flipped))
+
+    magnus_result = MagnusIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, 0.0, dt)
+    munthe_kaas_result = MuntheKaasIntegrator().integrate(Quaternion(1, 0, 0, 0), omega, 0.0, dt)
+
+    magnus_error = quaternion_error(magnus_result)
+    munthe_kaas_error = quaternion_error(munthe_kaas_result)
+
+    assert magnus_error < munthe_kaas_error / 5
