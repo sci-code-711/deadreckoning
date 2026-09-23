@@ -41,6 +41,18 @@ class AttitudeIntegrator(ABC):
 
         """
 
+    def reset(self) -> None:
+        """
+        Clear any internal state carried between :meth:`integrate` calls.
+
+        A no-op for every stateless (single-step) integrator - overridden
+        by stateful ones (see :class:`AdamsBashforth2Integrator`) that
+        carry history across calls. Call this before reusing one
+        integrator instance for a second, independent sequence of steps,
+        so the new sequence doesn't see history left over from the first.
+
+        """
+
 
 class RK4Integrator(AttitudeIntegrator):
     """
@@ -260,3 +272,104 @@ class ConingIntegrator(AttitudeIntegrator):
 
         result = q0 * Quaternion.from_axis_angle(rotation_vector, angle)
         return result * (1.0 / abs(result))
+
+
+class AdamsBashforth2Integrator(AttitudeIntegrator):
+    """
+    Multistep integrator: reuses the angular-rate derivative from the
+    *previous* step instead of spending an extra ``omega()`` evaluation on
+    it within the current one. Every other integrator in this module is
+    single-step - it sees only the current ``[t0, t1]`` in isolation, as
+    :meth:`AttitudeIntegrator.integrate`'s signature implies. This one is
+    stateful, which needs its own design note since the interface itself
+    doesn't change to accommodate it:
+
+    **Design decision**: :meth:`integrate` keeps the exact same signature
+    as every other integrator - no interface change, nothing else needs to
+    implement anything new. State (the previous step's end time, end
+    attitude, and start-of-step derivative) lives on the instance itself,
+    written after every call. It is only ever *trusted* on the next call
+    if that call's ``t0``/``q0`` exactly match the stored end time/
+    attitude - i.e. this call is genuinely the immediate next step of the
+    same sequence, not an unrelated or out-of-order one. If they don't
+    match (first call ever, a fresh unrelated sequence sharing this
+    instance, or a call made out of strict order), it transparently falls
+    back to a single-step (forward-Euler) estimate instead of trusting
+    stale or unrelated history - safe by construction, never silently
+    wrong, just without the multistep speedup on that particular call.
+    :meth:`reset` clears the stored history explicitly (e.g. before
+    reusing one instance for a second, independent run).
+
+    This matters in practice: :class:`deadrec.dead_reckoning.DeadReckoner`
+    (and :class:`deadrec.ekf.GravityCorrectedEKF`, which doesn't override
+    its step logic) call the integrator exactly once per sample, in strict
+    order, each call's ``q0`` literally being the previous call's result -
+    a genuine sequential chain, so the history path activates correctly
+    there. :class:`deadrec.ekf.WindowedGravityCorrectedEKF`, by contrast,
+    evaluates several candidate steps from the *same* fixed starting
+    attitude while probing different look-ahead windows - not a real
+    chain - so the ``q0`` check almost never matches there and this
+    integrator quietly (and correctly) just falls back every time, with no
+    reckoner-level changes needed to stay correct, at the cost of not
+    benefiting from the speedup in that specific reckoner.
+
+    **The maths.** For ``dq/dt = f(t, q) = 0.5*Omega(w(t))*q``, given the
+    derivative at the start of this step, ``f0 = f(t0, q0)``, and the
+    derivative from the start of the *previous* step, ``f_prev``, over its
+    own duration ``h_prev``, the classical (fixed-step) 2nd-order
+    Adams-Bashforth update is ``q1 = q0 + h*(1.5*f0 - 0.5*f_prev)`` for
+    step size ``h``. That assumes equal step sizes, which real IMU sample
+    timing rarely guarantees exactly, so this uses the variable-step
+    generalization instead - linearly extrapolating the two known
+    derivative points and integrating that extrapolation over the new
+    step:
+
+    ``Theta = h*(f0*(1 + h/(2*h_prev)) - f_prev*(h/(2*h_prev)))``
+
+    which reduces *exactly* to the textbook ``1.5*f0 - 0.5*f_prev`` formula
+    when ``h == h_prev`` (confirmed to machine precision as a permanent
+    regression test, not just during derivation). Composed the same way
+    :class:`RK4Integrator` composes its stages: ``q1 = q0 + Theta``,
+    renormalized - not via an exponential, since this integrates in the
+    ambient quaternion space rather than building a rotation vector.
+
+    At equal per-call cost (one ``omega()`` evaluation, same as
+    :class:`EulerIntegrator`), this is markedly more accurate once history
+    has built up over a few small, uniformly-spaced steps - but for a
+    single large step relative to the motion's own timescale, the
+    extrapolation can actually overshoot and do *worse* than plain Euler,
+    since multistep predictor accuracy is an asymptotic (``h -> 0``)
+    guarantee, not a per-step one regardless of step size. Both behaviours
+    are confirmed empirically, not just asserted.
+    """
+
+    def __init__(self) -> None:
+        self._history: tuple[float, np.ndarray, np.ndarray, float] | None = None
+
+    def reset(self) -> None:
+        self._history = None
+
+    def integrate(
+        self, q0: Quaternion, omega: Callable[[float], np.ndarray], t0: float, t1: float
+    ) -> Quaternion:
+        q0_vec = np.array([q0.w, q0.x, q0.y, q0.z])
+        f0 = 0.5 * omega_matrix(omega(t0)) @ q0_vec
+        h = t1 - t0
+
+        has_continuous_history = self._history is not None and (
+            abs(self._history[0] - t0) < 1e-9 and np.allclose(self._history[1], q0_vec, atol=1e-9)
+        )
+
+        if has_continuous_history:
+            _, _, f_prev, h_prev = self._history
+            theta = h * (f0 * (1 + h / (2 * h_prev)) - f_prev * (h / (2 * h_prev)))
+        else:
+            theta = h * f0
+
+        q1_vec = q0_vec + theta
+        result = Quaternion(*q1_vec)
+        result = result * (1.0 / abs(result))
+
+        self._history = (t1, np.array([result.w, result.x, result.y, result.z]), f0, h)
+
+        return result

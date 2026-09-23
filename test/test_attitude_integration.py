@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from deadrec.attitude_integration import (
+    AdamsBashforth2Integrator,
     ConingIntegrator,
     EulerIntegrator,
     ExactExponentialIntegrator,
@@ -12,7 +13,7 @@ from deadrec.attitude_integration import (
     RK4Integrator,
 )
 from deadrec.interpolation import TwoPointLinearInterpolator
-from deadrec.kinematics import rk4_attitude_step
+from deadrec.kinematics import omega_matrix, rk4_attitude_step
 from deadrec.quaternion import Quaternion
 from deadrec.samples import ImuSample
 
@@ -470,3 +471,203 @@ def test_coning_integrator_more_accurate_than_munthe_kaas_for_coning_case():
     # not pinning the exact ratio.
     assert coning_error < munthe_kaas_error / 3
     assert coning_error < magnus_error / 10
+
+
+# --- AdamsBashforth2Integrator ---
+
+
+def test_adams_bashforth2_integrator_zero_rate_is_identity():
+    qi = Quaternion.from_eul_angles(0.3, -0.2, 0.1)
+
+    result = AdamsBashforth2Integrator().integrate(qi, lambda t: np.zeros(3), t0=0.0, t1=0.05)
+
+    _assert_quaternions_close(result, qi)
+
+
+def test_adams_bashforth2_integrator_returns_unit_quaternion():
+    result = AdamsBashforth2Integrator().integrate(
+        Quaternion(1, 0, 0, 0), lambda t: np.array([1.0, 2.0, 3.0]), t0=0.0, t1=0.02
+    )
+
+    assert abs(result) == pytest.approx(1.0)
+
+
+def _bootstrap_step(q0, omega, t0, t1):
+    """The plain forward-Euler formula AdamsBashforth2Integrator falls
+    back to when it has no trustworthy history."""
+    q0_vec = np.array([q0.w, q0.x, q0.y, q0.z])
+    f0 = 0.5 * omega_matrix(omega(t0)) @ q0_vec
+    q1_vec = q0_vec + (t1 - t0) * f0
+    result = Quaternion(*q1_vec)
+    return result * (1.0 / abs(result))
+
+
+def test_adams_bashforth2_integrator_first_call_falls_back_to_bootstrap():
+    q0 = Quaternion.from_eul_angles(0.1, 0.2, -0.3)
+
+    def omega(t):
+        return np.array([1.0, -0.5, 2.0])
+
+    result = AdamsBashforth2Integrator().integrate(q0, omega, t0=0.0, t1=0.05)
+    expected = _bootstrap_step(q0, omega, 0.0, 0.05)
+
+    _assert_quaternions_close(result, expected, abs_tol=1e-12)
+
+
+def test_adams_bashforth2_integrator_uses_history_on_continuous_second_call():
+    q0 = Quaternion.from_eul_angles(0.1, 0.2, -0.3)
+
+    def omega(t):
+        return np.array([1.0, -0.5, 2.0]) + t * np.array([0.2, 0.1, -0.3])
+
+    integrator = AdamsBashforth2Integrator()
+    q1 = integrator.integrate(q0, omega, t0=0.0, t1=0.05)
+    q2 = integrator.integrate(q1, omega, t0=0.05, t1=0.10)
+
+    # Hand-computed variable-step AB2 formula (here with equal steps).
+    q0_vec = np.array([q0.w, q0.x, q0.y, q0.z])
+    q1_vec = np.array([q1.w, q1.x, q1.y, q1.z])
+    f_prev = 0.5 * omega_matrix(omega(0.0)) @ q0_vec
+    f0 = 0.5 * omega_matrix(omega(0.05)) @ q1_vec
+    h_prev = 0.05
+    h = 0.05
+    theta = h * (f0 * (1 + h / (2 * h_prev)) - f_prev * (h / (2 * h_prev)))
+    expected_vec = q1_vec + theta
+    expected = Quaternion(*expected_vec)
+    expected = expected * (1.0 / abs(expected))
+
+    _assert_quaternions_close(q2, expected, abs_tol=1e-12)
+
+    # And it must differ from the plain bootstrap - confirms the history
+    # path was actually taken, not silently ignored.
+    bootstrap_only = _bootstrap_step(q1, omega, 0.05, 0.10)
+    assert abs(q2.x - bootstrap_only.x) > 1e-6 or abs(q2.y - bootstrap_only.y) > 1e-6
+
+
+def test_adams_bashforth2_integrator_falls_back_when_discontinuous():
+    def omega(t):
+        return np.array([1.0, -0.5, 2.0])
+
+    integrator = AdamsBashforth2Integrator()
+    integrator.integrate(Quaternion(1, 0, 0, 0), omega, t0=0.0, t1=0.05)
+
+    # A second call whose q0 doesn't match the first call's result - e.g.
+    # a different, unrelated attitude at the same t0=0.05 - must not trust
+    # the stored history.
+    unrelated_q0 = Quaternion.from_eul_angles(0.5, 0.5, 0.5)
+    result = integrator.integrate(unrelated_q0, omega, t0=0.05, t1=0.10)
+    expected = _bootstrap_step(unrelated_q0, omega, 0.05, 0.10)
+
+    _assert_quaternions_close(result, expected, abs_tol=1e-12)
+
+
+def test_adams_bashforth2_integrator_reset_clears_history():
+    def omega(t):
+        return np.array([1.0, -0.5, 2.0])
+
+    integrator = AdamsBashforth2Integrator()
+    q1 = integrator.integrate(Quaternion(1, 0, 0, 0), omega, t0=0.0, t1=0.05)
+    integrator.reset()
+
+    # Even though q1/t1=0.05 would otherwise be valid, continuing history,
+    # reset() must have cleared it, so this call bootstraps instead.
+    result = integrator.integrate(q1, omega, t0=0.05, t1=0.10)
+    expected = _bootstrap_step(q1, omega, 0.05, 0.10)
+
+    _assert_quaternions_close(result, expected, abs_tol=1e-12)
+
+
+def test_adams_bashforth2_integrator_handles_variable_step_sizes():
+    q0 = Quaternion.from_eul_angles(0.1, 0.2, -0.3)
+
+    def omega(t):
+        return np.array([1.0, -0.5, 2.0]) + t * np.array([0.2, 0.1, -0.3])
+
+    integrator = AdamsBashforth2Integrator()
+    q1 = integrator.integrate(q0, omega, t0=0.0, t1=0.05)  # h_prev = 0.05
+    q2 = integrator.integrate(q1, omega, t0=0.05, t1=0.13)  # h = 0.08 (different)
+
+    q0_vec = np.array([q0.w, q0.x, q0.y, q0.z])
+    q1_vec = np.array([q1.w, q1.x, q1.y, q1.z])
+    f_prev = 0.5 * omega_matrix(omega(0.0)) @ q0_vec
+    f0 = 0.5 * omega_matrix(omega(0.05)) @ q1_vec
+    h_prev = 0.05
+    h = 0.08
+    theta = h * (f0 * (1 + h / (2 * h_prev)) - f_prev * (h / (2 * h_prev)))
+    expected_vec = q1_vec + theta
+    expected = Quaternion(*expected_vec)
+    expected = expected * (1.0 / abs(expected))
+
+    _assert_quaternions_close(q2, expected, abs_tol=1e-12)
+
+
+def test_adams_bashforth2_integrator_reduces_to_fixed_step_formula_when_uniform():
+    # The derivation's own correctness check: with equal step sizes, the
+    # variable-step formula must reduce exactly to the textbook
+    # 1.5*f0 - 0.5*f_prev Adams-Bashforth-2 update.
+    q0 = Quaternion.from_eul_angles(0.2, -0.1, 0.4)
+
+    def omega(t):
+        return np.array([0.5, 1.2, -0.7]) + t * np.array([-0.1, 0.3, 0.2])
+
+    integrator = AdamsBashforth2Integrator()
+    q1 = integrator.integrate(q0, omega, t0=0.0, t1=0.04)
+    q2 = integrator.integrate(q1, omega, t0=0.04, t1=0.08)
+
+    q1_vec = np.array([q1.w, q1.x, q1.y, q1.z])
+    f_prev = 0.5 * omega_matrix(omega(0.0)) @ np.array([q0.w, q0.x, q0.y, q0.z])
+    f0 = 0.5 * omega_matrix(omega(0.04)) @ q1_vec
+    h = 0.04
+    expected_vec = q1_vec + h * (1.5 * f0 - 0.5 * f_prev)
+    expected = Quaternion(*expected_vec)
+    expected = expected * (1.0 / abs(expected))
+
+    _assert_quaternions_close(q2, expected, abs_tol=1e-12)
+
+
+def test_adams_bashforth2_integrator_more_accurate_than_euler_after_warmup():
+    # The multistep accuracy claim: at equal per-call cost (1 omega()
+    # evaluation each), AdamsBashforth2Integrator should be clearly more
+    # accurate than EulerIntegrator once a few small, uniform steps have
+    # built up history - the asymptotic (small-step) regime multistep
+    # methods are actually designed for.
+    amplitude = 1.0
+    omega_c = 2 * np.pi * 2.0
+    dt = 0.02
+    n_steps = 20
+
+    def omega(t):
+        return amplitude * np.array([np.cos(omega_c * t), np.sin(omega_c * t), 0.0])
+
+    step_times = [i * dt for i in range(n_steps + 1)]
+
+    reference = Quaternion(1, 0, 0, 0)
+    for i in range(n_steps):
+        substeps = np.linspace(step_times[i], step_times[i + 1], 1501)
+        for j in range(len(substeps) - 1):
+            reference = ExactExponentialIntegrator().integrate(
+                reference, omega, substeps[j], substeps[j + 1]
+            )
+
+    def quaternion_error(q):
+        diff = np.array([q.w, q.x, q.y, q.z]) - np.array(
+            [reference.w, reference.x, reference.y, reference.z]
+        )
+        diff_flipped = np.array([q.w, q.x, q.y, q.z]) + np.array(
+            [reference.w, reference.x, reference.y, reference.z]
+        )
+        return min(np.linalg.norm(diff), np.linalg.norm(diff_flipped))
+
+    ab2 = AdamsBashforth2Integrator()
+    q_ab2 = Quaternion(1, 0, 0, 0)
+    q_euler = Quaternion(1, 0, 0, 0)
+    euler = EulerIntegrator()
+    for i in range(n_steps):
+        q_ab2 = ab2.integrate(q_ab2, omega, step_times[i], step_times[i + 1])
+        q_euler = euler.integrate(q_euler, omega, step_times[i], step_times[i + 1])
+
+    ab2_error = quaternion_error(q_ab2)
+    euler_error = quaternion_error(q_euler)
+
+    # Empirically ~5.2x for this case - safe margin under it.
+    assert ab2_error < euler_error / 2

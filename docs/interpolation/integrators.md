@@ -188,18 +188,56 @@ Savage-style N-sample strapdown-INS coning algorithms and higher-order
 Magnus expansions, derived here from first principles for this specific
 quadratic model rather than reproduced from a numbered coefficient table.
 
+## `AdamsBashforth2Integrator`
+
+Every integrator above is single-step: `integrate(q0, omega, t0, t1)`
+only ever sees the current step in isolation. A *multistep* method
+instead reuses the angular-rate derivative computed for the *previous*
+step, avoiding an extra `w(t)` evaluation in the current one. Given the
+derivative at this step's start `f0 = f(t0, q0)` (where
+`f(t, q) = 0.5*Omega(w(t))*q`) and the previous step's own start
+derivative `f_prev` (over its duration `h_prev`), the variable-step
+2nd-order Adams-Bashforth update - built by linearly extrapolating the
+two known derivative points and integrating that extrapolation over the
+new step of size `h` - is:
+
+```
+Theta = h*(f0*(1 + h/(2*h_prev)) - f_prev*(h/(2*h_prev)))
+q1 = q0 + Theta, renormalized
+```
+
+which reduces exactly to the textbook fixed-step formula
+`h*(1.5*f0 - 0.5*f_prev)` when `h == h_prev`.
+
+Being stateful is a real design departure from every integrator above,
+so it comes with ground rules stated plainly rather than left implicit:
+the previous step's end time/attitude/derivative are stored on the
+instance, and only *trusted* on the next call if that call's `t0`/`q0`
+exactly match what's stored - i.e. it's genuinely the next step of the
+same sequence. Otherwise (the first call ever, a fresh sequence reusing
+the same instance, or an out-of-order call) it transparently falls back
+to a single forward-Euler step instead of trusting unrelated history -
+safe by construction, just without the speedup on that call. At equal
+per-call cost to `EulerIntegrator` (one evaluation each), this is
+markedly more accurate once a few small, uniformly-spaced steps have
+built up history - but for one large step relative to the motion's own
+timescale, the extrapolation can overshoot and do *worse* than plain
+Euler, since multistep accuracy is an asymptotic (small-step) guarantee,
+not a per-step one.
+
 ## Currently implemented, and what's next
 
-Six integration strategies are implemented, trading `w(t)`-evaluation
-cost against accuracy and coning-correction: `EulerIntegrator` (1
-evaluation, 1st-order) through `RK4Integrator`/`MuntheKaasIntegrator`
-(3-4 evaluations, higher-order but no coning correction) to
-`MagnusIntegrator` (2 evaluations, linear-model coning correction) and
-`ConingIntegrator` (3 evaluations, quadratic-model coning correction).
+Seven integration strategies are implemented, trading `w(t)`-evaluation
+cost (and, for `AdamsBashforth2Integrator`, statefulness) against
+accuracy and coning-correction: `EulerIntegrator` (1 evaluation,
+1st-order) through `RK4Integrator`/`MuntheKaasIntegrator` (3-4
+evaluations, higher-order but no coning correction) to `MagnusIntegrator`
+(2 evaluations, linear-model coning correction), `ConingIntegrator` (3
+evaluations, quadratic-model coning correction), and
+`AdamsBashforth2Integrator` (1 evaluation plus history, multistep).
 Further strategies — higher-sample coning algorithms, higher-order Magnus
-expansions, or multistep methods using rate history across steps — are
-conceivable future additions, without committing to any particular one
-here.
+expansions, or higher-order multistep methods — are conceivable future
+additions, without committing to any particular one here.
 
 ## How we handle look-ahead windows
 
